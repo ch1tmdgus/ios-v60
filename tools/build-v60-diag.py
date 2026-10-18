@@ -53,7 +53,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--template', required=True, type=Path)
     ap.add_argument('--out', required=True, type=Path)
-    ap.add_argument('--mode', choices=['cpu', 'smp'], default='cpu')
+    ap.add_argument('--mode', choices=['cpu', 'smp', 'gic-read', 'mmu-hold'], default='cpu')
     a = ap.parse_args()
     root = Path(__file__).resolve().parent.parent
     out = a.out.resolve()
@@ -65,7 +65,7 @@ def main():
         raise SystemExit('aarch64 GCC/binutils required; set CROSS_COMPILE')
     flags = ['-O2', '-ffreestanding', '-nostdlib', '-fno-pic', '-mgeneral-regs-only',
              '-mstrict-align', '-fno-stack-protector', '-fno-builtin', '-Wall', '-Wextra',
-             '-DV60_DIAG=' + ('1' if a.mode == 'cpu' else '2')]
+             '-DV60_DIAG=' + {'cpu': '1', 'smp': '2', 'gic-read': '3', 'mmu-hold': '4'}[a.mode]]
     objects = []
     for name in ['start.S', 'shim.c', 'console.c', 'mmu.c', 'fdt.c', 'loader.c', 'ufs.c']:
         obj = out / (Path(name).stem + '.o')
@@ -89,7 +89,8 @@ def main():
     if kernel[56:60] != b'ARM\x64' or struct.unpack_from('<Q', kernel, 16)[0] != end:
         raise ValueError('invalid Linux Image header')
     raw.write_bytes(kernel)
-    name = 'v60-shim-test2' + ('-smp' if a.mode == 'smp' else '') + '.img'
+    name = {'cpu': 'v60-shim-test2.img', 'smp': 'v60-shim-test2-smp.img',
+            'gic-read': 'v60-shim-test2b.img', 'mmu-hold': 'v60-shim-test2b-mmu.img'}[a.mode]
     boot = pack_boot(a.template.read_bytes(), kernel)
     (out / name).write_bytes(boot)
     (out / 'relocations.txt').write_text(relocs)

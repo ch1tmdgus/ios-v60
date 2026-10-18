@@ -1,5 +1,27 @@
 # V60 local handoff — 2026-10-19
 
+## Latest V60: test2 reset after MMU; test2b isolation
+
+- User reports PAGE 2 -> black screen briefly -> device reboot. No IRQ
+  result, panic text, or exact failure instruction observed. This supersedes
+  the pending-PAGE-3 request below. Hardware MMU activation was observed,
+  but prolonged stability and IRQ delivery remain unverified.
+- Previous CPU mode mutates GIC and unmasks IRQ in one burst. Do not infer
+  a particular GIC fault/watchdog cause from the reboot alone.
+- New build modes: gic-read (V60_DIAG=3, v60-shim-test2b.img) and mmu-hold
+  (V60_DIAG=4, v60-shim-test2b-mmu.img). Both activate 16K MMU with IRQ
+  masked. gic-read adds a barrier + 2s breadcrumb before each read group;
+  scans GICR with per-frame breadcrumbs, never writes GIC/ICC or unmasks
+  IRQ. mmu-hold never accesses GIC, reports ALIVE every 5s for 120s.
+- No UFS/payload/CPU_ON/device commands in these new diagnostic paths.
+- Local checks: GCC builds, no C ABS64, preserved DTB/ramdisk and valid
+  image ID/size, reproducible gic-read build. Disassembly has no DAIF IRQ
+  unmask or ICC configuration writes in new modes. QEMU platform-adapted
+  copy reached GIC reads complete and MMU hold 120s complete.
+- Read V60-TEST2B.md for next user test and interpretation. Device results
+  pending. Preserve previous test2 artifacts for reproducibility.
+
+
 ## V60 test2 device results received (IMG_2141 / IMG_2142)
 
 - IMG_2141: PAGE 1, CurrentEL=4 (EL1), CNTFRQ=0x124f800
@@ -8,10 +30,8 @@
 - IMG_2142: PAGE 2, 16KB MMU rc=0, n_l3=1;
   SCTLR before=0xc00808, after=0xc0180d (M/C/I enabled).
   PAR IMG / FB / GIC all show bit0=0 (successful translation).
-- No PAGE 3 IRQ photo supplied yet. Do not mark hardware timer/GIC tests PASS.
-- NEXT: obtain final PAGE 3, or whether PAGE 2 stays indefinitely / device
-  resets / PANIC appears after the 15-second MMU page. No new image needed
-  to obtain that result.
+- Follow-up: user reports black screen and reboot after PAGE 2. No PAGE 3
+  IRQ result observed; do not mark hardware timer/GIC tests PASS. Use test2b.
 
 
 This section concerns the current LG V60, not the upstream sweet device below.
@@ -42,10 +62,10 @@ prior sweet-device destructive approvals below do not apply to this V60.
   GICv3. Reached PASS: VTIMER=25, PTIMER=25, SGI=10, other=0.
   This validates control flow/MMU/IRQ logic, not V60 hardware. QEMU copy
   and its framebuffer capture are private scratch, not shipping images.
-- No V60 test2 boot yet. No flashing, partition writes, kernel CI or push.
-- NEXT: ask for test2 PAGE 2 and final PAGE 3 photos. If PASS, prepare
-  V60-specific ADT and guarded single-core XNU boot; do not reuse sweet
-  highmem or touch/keys/RPMh addresses blindly. See V60-BRINGUP.md.
+- V60 test2 reached CPU/MMU pages then rebooted (see latest test2b section).
+  No flashing, partition writes, kernel CI or push.
+- NEXT: test2b read-only GIC and MMU stability control. XNU stage remains
+  pending; do not reuse sweet highmem or peripheral addresses blindly.
 
 ---
 

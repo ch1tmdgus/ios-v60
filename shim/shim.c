@@ -392,8 +392,90 @@ static void __attribute__((noreturn)) diag_halt(void)
 	for (;;) __asm__ volatile("wfe");
 }
 
+/* test2b: keep IRQ masked; isolate MMU stability from GIC register access. */
+static void __attribute__((unused)) diag_step(const char *name)
+{
+	stage = name;
+	con_str("STEP", name);
+	/* Make the breadcrumb visible before attempting the next operation. */
+	__asm__ volatile("dsb sy" ::: "memory");
+	delay_ms(2000);
+}
+
+static void __attribute__((unused, noreturn)) v60_read_diag(void)
+{
+	con_clear(RED);
+#if V60_DIAG == 4
+	con_str("V60", "test2b MMU hold / IRQ masked");
+#else
+	con_str("V60", "test2b GIC reads / IRQ masked");
+#endif
+	con_hex("EL", rsr("CurrentEL"));
+	con_hex("SCTLR0", rsr("sctlr_el1"));
+	if ((((rsr("id_aa64mmfr0_el1") >> 20) & 15) == 15) ||
+	    (rsr("sctlr_el1") & 5)) {
+		con_str("STOP", "16K absent or MMU/cache already on");
+		diag_halt();
+	}
+	struct mmu_info mi = {0};
+	diag_step("enable 16K MMU");
+	int rc = mmu_enable(&mi);
+	con_hex2("MMU", "rc=", rc, "l3=", mi.n_l3);
+	con_hex("SCTLR1", rsr("sctlr_el1"));
+	if (rc) diag_halt();
+#if V60_DIAG == 4
+	con_str("INFO", "no GIC access; alive every 5 s");
+	stage = "mmu hold";
+	for (unsigned seconds = 0; seconds <= 120; seconds += 5) {
+		con_hex2("ALIVE", "seconds=", seconds, 0, 0);
+		__asm__ volatile("dsb sy" ::: "memory");
+		if (seconds < 120) delay_ms(5000);
+	}
+	con_str("RESULT", "MMU hold 120 s complete");
+#else
+	diag_step("read ICC_SRE_EL1");
+	con_hex("SRE", rsr("icc_sre_el1"));
+	diag_step("read GICD_CTLR / TYPER / IIDR");
+	con_hex2("GICD", "ctlr=", rd32(GICD_BASE), "typer=", rd32(GICD_BASE + 4));
+	con_hex2("GICD", "iidr=", rd32(GICD_BASE + 8), 0, 0);
+	uint64_t aff = rsr("mpidr_el1");
+	uint32_t want = (aff & 0xffffff) | ((aff >> 8) & 0xff000000);
+	uintptr_t r = 0;
+	for (uintptr_t off = 0; off < GICR_SIZE; off += GICR_PE_SIZE) {
+		stage = "read GICR_TYPER";
+		/* One breadcrumb per redistributor, kept on the same screen. */
+		con_hex2("READ R", "base=", GICR_BASE + off, 0, 0);
+		__asm__ volatile("dsb sy" ::: "memory");
+		delay_ms(1000);
+		uint64_t typer = rd64(GICR_BASE + off + GICR_TYPER);
+		con_hex("TYPER", typer);
+		if ((uint32_t)(typer >> 32) == want) {
+			r = GICR_BASE + off;
+			break;
+		}
+		if (typer & (1 << 4)) break;
+	}
+	if (!r) {
+		con_str("STOP", "boot CPU redistributor not found");
+		diag_halt();
+	}
+	diag_step("read GICR_WAKER / CTLR");
+	con_hex2("GICR", "waker=", rd32(r + GICR_WAKER), "ctlr=", rd32(r));
+	diag_step("read PPI group / enable / pending");
+	con_hex2("PPI", "group=", rd32(r + GICR_IGROUPR0), "enable=", rd32(r + GICR_ISENABLER0));
+	con_hex2("PPI", "pending=", rd32(r + GICR_ISPENDR0), "active=", rd32(r + GICR_ISACTIVER0));
+	con_str("RESULT", "GIC register reads complete");
+	con_str("INFO", "no GIC writes / no IRQ delivery test");
+#endif
+	diag_halt();
+}
+
 static void __attribute__((noreturn)) v60_diag(uint64_t dtb)
 {
+#if V60_DIAG == 3 || V60_DIAG == 4
+	(void)dtb;
+	v60_read_diag();
+#endif
 	stage = "v60 cpu registers";
 	con_clear(RED);
 #if V60_DIAG == 2
