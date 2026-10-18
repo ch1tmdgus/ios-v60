@@ -1,5 +1,19 @@
 # V60 local handoff — 2026-10-19
 
+## V60 test2 device results received (IMG_2141 / IMG_2142)
+
+- IMG_2141: PAGE 1, CurrentEL=4 (EL1), CNTFRQ=0x124f800
+  (19,200,000 Hz), PSCI=0x10001, SMCCC=0x10001,
+  PSCI_FEATURES(CPU_ON)=0. This advertises CPU_ON support; not an SMP test.
+- IMG_2142: PAGE 2, 16KB MMU rc=0, n_l3=1;
+  SCTLR before=0xc00808, after=0xc0180d (M/C/I enabled).
+  PAR IMG / FB / GIC all show bit0=0 (successful translation).
+- No PAGE 3 IRQ photo supplied yet. Do not mark hardware timer/GIC tests PASS.
+- NEXT: obtain final PAGE 3, or whether PAGE 2 stays indefinitely / device
+  resets / PANIC appears after the 15-second MMU page. No new image needed
+  to obtain that result.
+
+
 This section concerns the current LG V60, not the upstream sweet device below.
 Current user authorization covers analysis, code changes and test image creation;
 prior sweet-device destructive approvals below do not apply to this V60.
