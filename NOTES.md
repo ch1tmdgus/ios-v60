@@ -1,5 +1,32 @@
 # V60 local handoff — 2026-10-19
 
+## Latest V60: test2b register reads complete; test2c write isolation
+
+- IMG_2145.HEIC: RESULT GIC register reads complete + END observed.
+  SRE=1, GICD CTLR=0x10, TYPER=0x007b041d, IIDR=0x0201143b;
+  boot GICR=0x17a60000, TYPER=0x21, WAKER/CTLR=0;
+  PPI group/enable/active=0, pending=0x08840000.
+  Reading registers after MMU activation completed; IRQ delivery is untested.
+- No device result for MMU-only 120s control. Do not claim long-term stability.
+- New gic-write mode (V60_DIAG=5), v60-shim-test2c.img: activate MMU,
+  keep IRQ masked, visible 2s breadcrumb before each configuration write,
+  DSB/ISB and readback afterward. First write matches original GICD CTLR
+  old|0x13, RWP bounded to 1s. Requires already-awake redistributor (as in
+  photo); no WAKER changes. Only ID1/27/30 group/priority/enable updates,
+  then ICC_CTLR/PMR/BPR1/IGRPEN1 separately. No timers enabled or SGIs sent.
+- Final write-sequence-complete is not proof of effective configuration;
+  inspect all readbacks. Nor does it establish the old reset's cause:
+  this diagnostic changes only three priorities instead of all 32.
+- Build/ABS64/unpack/Image-size/image-ID/DTB/ramdisk checks pass. Disassembly
+  contains no DAIF IRQ unmask, timer enables or SGI sends in shipping mode.
+- QEMU-adapted copy reached final write-sequence-complete with DAIF=0x3c0.
+  Only the emulator copy wakes its GICR first to model V60 WAKER=0; this
+  wake code is not in the shipping source/image. GIC addresses/PSCI also
+  adapted only in QEMU copy. Hardware test2c results pending.
+- See V60-TEST2C.md. NEXT: collect final screen or last STEP/panic before
+  reset; then decide whether/how to attempt isolated IRQ delivery.
+
+
 ## Latest V60: test2 reset after MMU; test2b isolation
 
 - User reports PAGE 2 -> black screen briefly -> device reboot. No IRQ
@@ -18,8 +45,8 @@
   image ID/size, reproducible gic-read build. Disassembly has no DAIF IRQ
   unmask or ICC configuration writes in new modes. QEMU platform-adapted
   copy reached GIC reads complete and MMU hold 120s complete.
-- Read V60-TEST2B.md for next user test and interpretation. Device results
-  pending. Preserve previous test2 artifacts for reproducibility.
+- test2b device read-completion photo has now been received (see latest
+  test2c section). Preserve old artifacts for reproducibility.
 
 
 ## V60 test2 device results received (IMG_2141 / IMG_2142)

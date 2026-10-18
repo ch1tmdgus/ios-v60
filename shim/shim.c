@@ -470,8 +470,105 @@ static void __attribute__((unused, noreturn)) v60_read_diag(void)
 	diag_halt();
 }
 
+/* test2c: separate configuration writes from IRQ delivery. */
+static void __attribute__((unused)) diag_priority(uintptr_t r, unsigned id,
+    const char *name)
+{
+	diag_step(name);
+	wr8(r + GICR_IPRIORITYR + id, 0xa0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("PRIOR", "id=", id, "read=", rd32(r + GICR_IPRIORITYR + (id & ~3U)));
+}
+
+static void __attribute__((unused, noreturn)) v60_write_diag(void)
+{
+	con_clear(RED);
+	con_str("V60", "test2c GIC writes / IRQ masked");
+	con_str("INFO", "readback after every write");
+	con_hex("DAIF", rsr("daif"));
+	if ((((rsr("id_aa64mmfr0_el1") >> 20) & 15) == 15) ||
+	    (rsr("sctlr_el1") & 5)) {
+		con_str("STOP", "16K absent or MMU/cache already on");
+		diag_halt();
+	}
+	struct mmu_info mi = {0};
+	diag_step("enable 16K MMU");
+	int rc = mmu_enable(&mi);
+	con_hex2("MMU", "rc=", rc, "sctlr=", rsr("sctlr_el1"));
+	if (rc) diag_halt();
+	if (!(rsr("icc_sre_el1") & 1)) {
+		con_str("STOP", "SRE not enabled");
+		diag_halt();
+	}
+	/* First write of the original failing test, now with a visible barrier. */
+	diag_step("write GICD_CTLR | 0x13");
+	uint32_t old = rd32(GICD_BASE);
+	wr32(GICD_BASE, old | 0x13);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	uint64_t end = now() + rsr("cntfrq_el0");
+	while ((rd32(GICD_BASE) & (1U << 31)) && now() < end) ;
+	uint32_t ctlr = rd32(GICD_BASE);
+	con_hex2("GICD", "was=", old, "read=", ctlr);
+	if (ctlr & (1U << 31)) {
+		con_str("STOP", "GICD RWP timeout");
+		diag_halt();
+	}
+	stage = "find boot GICR";
+	uintptr_t r = find_gicr();
+	if (!r) {
+		con_str("STOP", "boot GICR not found");
+		diag_halt();
+	}
+	con_hex("GICR", r);
+	uint32_t waker = rd32(r + GICR_WAKER);
+	con_hex2("WAKER", "read=", waker, 0, 0);
+	if (waker & 6) {
+		/* test2b showed zero; avoid adding a different wakeup path here. */
+		con_str("STOP", "GICR not awake; send this screen");
+		diag_halt();
+	}
+	uint32_t mask = (1U << VTIMER_INTID) | (1U << PTIMER_INTID) | (1U << SGI_INTID);
+	diag_step("write IGROUPR0 (test IDs only)");
+	old = rd32(r + GICR_IGROUPR0);
+	wr32(r + GICR_IGROUPR0, old | mask);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("GROUP", "was=", old, "read=", rd32(r + GICR_IGROUPR0));
+	diag_priority(r, SGI_INTID, "write priority SGI1");
+	diag_priority(r, VTIMER_INTID, "write priority VTIMER");
+	diag_priority(r, PTIMER_INTID, "write priority PTIMER");
+	diag_step("write ISENABLER0 (test IDs only)");
+	wr32(r + GICR_ISENABLER0, mask);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("ENABLE", "want=", mask, "read=", rd32(r + GICR_ISENABLER0));
+	diag_step("write ICC_CTLR_EL1 EOImode 0");
+	uint64_t c = rsr("icc_ctlr_el1");
+	wsr("icc_ctlr_el1", c & ~2ULL);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("ICC CTRL", "was=", c, "read=", rsr("icc_ctlr_el1"));
+	diag_step("write ICC_PMR_EL1 = 0xf0");
+	wsr("icc_pmr_el1", 0xf0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("PMR", rsr("icc_pmr_el1"));
+	diag_step("write ICC_BPR1_EL1 = 0");
+	wsr("icc_bpr1_el1", 0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("BPR1", rsr("icc_bpr1_el1"));
+	diag_step("write ICC_IGRPEN1_EL1 = 1");
+	wsr("icc_igrpen1_el1", 1);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("GRPEN1", rsr("icc_igrpen1_el1"));
+	con_hex("DAIF", rsr("daif"));
+	con_str("RESULT", "write sequence complete / IRQ masked");
+	con_str("INFO", "readbacks need review; IRQ untested");
+	diag_halt();
+}
+
 static void __attribute__((noreturn)) v60_diag(uint64_t dtb)
 {
+#if V60_DIAG == 5
+	(void)dtb;
+	v60_write_diag();
+#endif
 #if V60_DIAG == 3 || V60_DIAG == 4
 	(void)dtb;
 	v60_read_diag();
