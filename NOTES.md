@@ -1,3 +1,40 @@
+# V60 local handoff — 2026-10-19
+
+This section concerns the current LG V60, not the upstream sweet device below.
+Current user authorization covers analysis, code changes and test image creation;
+prior sweet-device destructive approvals below do not apply to this V60.
+
+- Baseline upstream: fdad0de8dc0e75c5ea84762adc03f7232dc91f19.
+- User supplied v60-shim-test1.patch and .img, dt.tar, v60.zip.
+  Private inputs remain outside git in the parent workspace work/ directory.
+- Applied test1 patch. User photo IMG_2139.HEIC confirms framebuffer + UFS
+  TUR/CAP/READ rc=0, 4096-byte LUN0 blocks, valid GPT, userdata at LBA
+  0x005e2e28 (sda28). No XNU payload in test1 (expected).
+- V60 dt.tar and Rofik kona.dtsi agree on GICD/GICR, timer INTIDs 27/30,
+  UFS host and 19.2 MHz counter. v60.zip/live.dts is malformed (Finder
+  metadata), dmesg.txt empty. Do not use its live.dts for hardware facts.
+- Added tools/build-v60-diag.py, --mode cpu or smp, reusing test1 boot-v2
+  settings, identical DTB and empty ramdisk; recomputes image ID.
+- CPU diagnostic bypasses loader/UFS, displays CPU features/PSCI, then 16K
+  MMU, then both timer IRQs and 10 self SGIs. Pages 1/2 last 15 seconds;
+  final result/panic stays on screen. SMP is a separate MMU-off image,
+  skips boot CPU, logs MIDR/MPIDR and requests CPU_OFF.
+- Fixed panic X30 saved-register index (31, not 29), uses actual CNTFRQ
+  for time conversion. Existing loader paths remain available outside diagnostics.
+- Built both using aarch64-elf GCC 16.2.0 / binutils 2.47 on arm64 macOS.
+  No C ABS64 relocations; unpack/DTB/ramdisk/header checks pass.
+- QEMU CPU smoke: temporary source copy changes ONLY GICD/GICR to virt's
+  0x08000000/0x080a0000 and PSCI instruction SMC->HVC. 2GB RAM, Cortex-A76,
+  GICv3. Reached PASS: VTIMER=25, PTIMER=25, SGI=10, other=0.
+  This validates control flow/MMU/IRQ logic, not V60 hardware. QEMU copy
+  and its framebuffer capture are private scratch, not shipping images.
+- No V60 test2 boot yet. No flashing, partition writes, kernel CI or push.
+- NEXT: ask for test2 PAGE 2 and final PAGE 3 photos. If PASS, prepare
+  V60-specific ADT and guarded single-core XNU boot; do not reuse sweet
+  highmem or touch/keys/RPMh addresses blindly. See V60-BRINGUP.md.
+
+---
+
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
 ## Agent handoff / active work (2026-10-15, latest)
