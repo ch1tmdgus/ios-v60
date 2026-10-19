@@ -1,5 +1,40 @@
 # V60 local handoff — 2026-10-19
 
+## Latest V60: user supplied GUI-booting XNU; SW42902 touch1 experiment
+
+- User reports v60-xnu-boot2-gui.img boots to a black lock-style screen with
+  clock, battery, home bar and camera button, but no touch. This supersedes
+  old statements that no V60 XNU boot was observed. It is a user report,
+  not an independently captured full home-screen result.
+- User has only gui/diag images, no matching build source. Binary contains
+  Darwin 22.6.0 xnu-8796.141.3, CI path ios-v60/dxb/xnu. Public repository
+  lookup failed; full matching source/build tree not recovered.
+- Exact baseline SHA256: 6c916223cf86aca1caf13d4e490a20c519dfc7f315671bb494e643a2d31ab816.
+  Payload has sweettouch=0, sweetkeys=0, sweetusb=0, cpus=4. Included touch
+  implementation is the old Goodix/Focaltech module, not a V60 driver.
+- Live DT proves active SW42902 @0x28 on GENI13 0xa94000, disabled SW42000.
+  GPIO38 reset/39 IRQ (TLMM SOUTH 0xf500000), GPIO67 VCL/68 VDD (NORTH
+  0xf900000), SDA36/SCL37. Compared Rofik 7eab1a7 touch/GCC/pinctrl sources.
+- Added self-contained v60-touch/ replacement source, exact-image guarded
+  builder and host/QEMU tests. Compiled module replaces only old disabled
+  touch code at 0xfffffe00074e9168 within original 0x2368-byte module space;
+  imports resolved using recovered symbols. No kernel-wide rebuild claimed.
+- Also inspected HID start() using height2460 but touch() retaining2399
+  clamp and2351 edge; builder validates and replaces 3 exact instructions
+  to2459/2411. Driver respects existing 2436 logical crop.
+- Driver waits60s, checks GENI firmware/packing/idle state, enables documented
+  clock/GPIO pins, confirms chip10/protocol4 before volatile control writes,
+  polls reports and calls existing HID. No firmware/erase, PMIC/RPMh or
+  reset-low writes. Probe mode only reads controller ID after SoC setup.
+- Software checks: 15 packet tests ASan/UBSan; Apple printf varargs bridge
+  FP/LR/stack test in QEMU and compared Apple-target clang; build succeeds;
+  patch-size/BSS/import/image-ID/bounded-byte-diff checks. Real V60 touch
+  response remains UNTESTED. No device flashing or root-file edits performed.
+- Deliverables: touch1-gui, touch1-diag, touch1-probe images + manifest and
+  complete replacement source; see v60-touch/README.md. NEXT: user GUI boot,
+  wait for driver, test taps/swipe; if failure obtain V60 TOUCH log lines.
+
+
 ## Latest V60: test2b register reads complete; test2c write isolation
 
 - IMG_2145.HEIC: RESULT GIC register reads complete + END observed.
