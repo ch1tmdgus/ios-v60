@@ -1,98 +1,108 @@
-[![English](https://img.shields.io/badge/Language-English-blue?style=for-the-badge)](README.en.md)
+[![한국어](https://img.shields.io/badge/Language-한국어-blue?style=for-the-badge)](README.ko.md)
 
 # iOS 16 on LG V60
 
-LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
-**iOS 16 / XNU 포팅 프로젝트**입니다. 기존 `ios-sweet` 기반 작업을 V60으로 옮깁니다.
+An experimental **iOS 16 / XNU porting project** for the LG V60 ThinQ 5G
+(`timelm`, Qualcomm SM8250 / Snapdragon 865), bringing the existing `ios-sweet`
+work to the V60.
 
-**2026-10-19: V60에서 iOS GUI 부팅과 touch4의 실제 터치 동작이 확인됐습니다.**
-최신 touch5에서 **버튼 동작도 사용자 확인**됐습니다. 입력 지연·프레임 개선의
-정량 결과는 아직 없습니다. 검은 배경화면과 설정 → 일반 → 정보 진입 시 멈춤은 미해결입니다.
+**2026-10-19: iOS GUI boot and working touch input with touch4 have been confirmed on a V60.**
+**Button operation has also been confirmed by a user** with the latest touch5.
+There are no quantitative results for input latency or frame rate improvements yet.
+The black wallpaper and freezing when opening Settings → General → About remain unresolved.
 
-[QCA6390 Wi-Fi/Bluetooth 이식](docs/v60/WIRELESS.md)을 진행 중입니다.
-2026-10-20: 펌웨어 확보와 SE6 UART 내부 송수신의 실기기 검증을 마쳤습니다.
-[wireless3](docs/v60/WIRELESS3.md)는 전원 요청 후 외부 Bluetooth 칩 버전을 질의하는
-다음 테스트이며 아직 실기기 결과를 기다립니다. Wi-Fi 연결·Bluetooth 페어링은 미구현입니다.
+Work on the [QCA6390 Wi-Fi/Bluetooth port](docs/v60/WIRELESS.md) is ongoing.
+2026-10-20: Firmware acquisition and on-device verification of internal SE6 UART
+transmission and reception are complete.
+[wireless3](docs/v60/WIRELESS3.md) is the next test: it requests power, then queries
+the external Bluetooth chip's version. On-device results are still pending.
+Wi-Fi connectivity and Bluetooth pairing are not implemented.
 
-## 다운로드
+## Downloads
 
-[실험 빌드와 체크섬 — Releases](https://github.com/ch1tmdgus/ios-v60/releases/tag/v60-bringup-20261019)
+[Experimental builds and checksums — Releases](https://github.com/ch1tmdgus/ios-v60/releases/tag/v60-bringup-20261019)
 
-| 목적 | 파일 | 확인 상태 |
+| Purpose | File | Verification status |
 | --- | --- | --- |
-| 실제 터치가 동작한 버전 | `v60-xnu-touch4-gui.img` 또는 `v60-touch4-bundle.zip` | 사용자 실기기 성공 보고 |
-| 최신 기본 GUI | `v60-xnu-touch5-gui.img` | 버튼 동작 확인, 성능 정량 검증 대기 |
-| 최신 문제 진단, 화면 로그 숨김 | `v60-xnu-touch5-inspect.img` | 설정 정보 멈춤/버튼 진단용 |
-| CPU 부하 비교 | `v60-xnu-touch5-balanced.img` | touch5 입력 개선 + 화면 복사 목표30Hz |
-| 과거 shim/터치 단계 | `v60-shim-test*-bundle.zip`, `v60-touch1..3-bundle.zip` | 아래 기록 참고 |
+| Version with confirmed working touch input | `v60-xnu-touch4-gui.img` or `v60-touch4-bundle.zip` | User-reported success on a physical device |
+| Latest standard GUI build | `v60-xnu-touch5-gui.img` | Button operation confirmed; quantitative performance validation pending |
+| Latest diagnostic build, with on-screen logs hidden | `v60-xnu-touch5-inspect.img` | For diagnosing the About screen freeze and buttons |
+| CPU load comparison | `v60-xnu-touch5-balanced.img` | touch5 input improvements + a 30 Hz target for screen copying |
+| Earlier shim/touch stages | `v60-shim-test*-bundle.zip`, `v60-touch1..3-bundle.zip` | See the history below |
 
-각 bundle에는 해당 버전 이미지·대체 모듈 소스·설명서·체크섬이 있습니다.
-Release의 `SHA256SUMS.txt`로 다운로드를 확인할 수 있습니다.
-Apple IPSW, iOS 루트 이미지, 사용자 파티션/캘리브레이션 덤프는 배포하지 않습니다.
-이 부팅 이미지만으로 iOS 사용자 공간이 설치되는 것은 아닙니다.
+Each bundle contains the corresponding image, replacement module source,
+documentation, and checksums. Verify downloads using `SHA256SUMS.txt` in the release.
+Apple IPSW files, iOS root images, and user partition/calibration dumps are not distributed.
+This boot image alone does not install the iOS userspace.
 
-## 현재 동작 상태
+## Current Status
 
-| 항목 | V60 상태 |
+| Component | V60 status |
 | --- | --- |
-| 부팅 | 제공된 `v60-xnu-boot2-gui.img`로 XNU/iOS GUI 부팅을 사용자 확인 |
-| 터치 | **touch4 성공**: SW42902, GPIO 소프트웨어 I²C → 기존 HID 경로 |
-| 터치 통신 | GENI SE13의 FIFO 비활성/GSI-only 확인. GSI DMA 이식 대신 GPIO36/37 사용 |
-| touch5 입력 개선 | 한 손가락 보고서156→48바이트, 추가 접점만 이어 읽기, 폴링10→2ms. 실기기48바이트/접점 로그 확인; 총 지연 미측정 |
-| 전원·볼륨 버튼 | touch5에서 기존 SPMI observer 드라이버와 V60 매핑으로 사용자 동작 확인 |
-| 화면 로그 | touch5는 GUI 표시 후 숨김. 영구 로그는 유지하며 panic은 표시 가능 |
-| 프레임/반응 | CPU framebuffer 복사. touch5 기본 목표60Hz, 비교용30Hz. 실제 fps 미측정, GPU 가속 미구현 |
-| 배경화면 | 검은색으로 남는 문제 미해결 |
-| 설정 → 일반 → 정보 | 누르면 멈추거나 반응하지 않는 증상. 원인 미확인 |
-| CPU/SMP | 성공한 이미지의 `cpus=4`와 ADT 유지. 코어별 동작/8코어는 별도 미검증 |
-| UFS/루트 | shim의 read-only UFS/GPT 확인 및 이후 사용자 공간 부팅 보고. 일반 설치 절차는 제공하지 않음 |
-| 배터리 | 아이콘 표시가 실제 연료계 측정의 증거는 아님. V60 하드웨어 연동 미검증 |
-| Bluetooth 이식 | wireless2 내부 UART 송수신 성공. wireless3 전원/HCI 버전 질의 빌드; 실기기 대기, 페어링 미구현 |
-| USB/네트워크·오디오·카메라·GPU | V60용으로 검증된 지원 없음 |
+| Boot | XNU/iOS GUI boot confirmed by a user with the supplied `v60-xnu-boot2-gui.img` |
+| Touch | **touch4 works**: SW42902, GPIO software I²C → existing HID path |
+| Touch communication | GENI SE13 confirmed to have FIFO disabled and operate in GSI-only mode. GPIO36/37 are used instead of porting GSI DMA |
+| touch5 input improvements | Single-finger reports reduced from 156 to 48 bytes; additional contacts read only as needed; polling interval reduced from 10 to 2 ms. On-device logs confirm 48-byte/contact reads; total latency has not been measured |
+| Power/volume buttons | Operation confirmed by a user in touch5 using the existing SPMI observer driver and V60 mappings |
+| On-screen logs | Hidden after the GUI appears in touch5. Persistent logs are retained, and panics can still be displayed |
+| Frame rate/responsiveness | CPU framebuffer copying. touch5 targets 60 Hz by default, with a 30 Hz comparison build. Actual FPS has not been measured; GPU acceleration is not implemented |
+| Wallpaper | Remains black; unresolved |
+| Settings → General → About | Freezes or becomes unresponsive when opened. Cause unknown |
+| CPU/SMP | Preserves `cpus=4` and the ADT from the working image. Per-core operation and eight-core support have not been separately verified |
+| UFS/root | Read-only UFS/GPT access verified in the shim, followed by a user report of userspace booting. No general installation procedure is provided |
+| Battery | The displayed icon is not evidence of actual fuel gauge readings. V60 hardware integration is unverified |
+| Bluetooth port | wireless2 internal UART transmission/reception succeeded. wireless3 is a power/HCI version query build; on-device results pending, pairing not implemented |
+| USB/networking/audio/camera/GPU | No verified V60 support |
 
-화면의 카메라/배터리 아이콘은 해당 하드웨어가 동작한다는 뜻이 아닙니다.
-이전 Redmi에서의 성공 기록은 V60 결과와 구분합니다.
+The camera and battery icons on screen do not indicate that the corresponding hardware works.
+Earlier successes on Redmi devices are kept separate from V60 results.
 
-## 시험 방법
+## Testing
 
-동작했던 원본/touch4 이미지를 보관하고 잠금 해제된 V60에서 **임시 부팅**합니다.
-현재 진단 이미지는 다음과 같습니다:
+Keep a copy of the working original/touch4 image and **temporarily boot** it on an
+unlocked V60. The current diagnostic image is:
 
 ```sh
 fastboot boot v60-xnu-touch5-inspect.img
 ```
 
-1. 부팅 후60초 이상 기다립니다. 이후 터치 worker가 시작합니다.
-2. 화면 중앙 탭·하단 스와이프·스크롤, 볼륨 두 버튼과 전원 짧게 누르기를 시험합니다.
-3. 설정 → 일반 → 정보가 멈춘 상태로 약2분 유지합니다.
-4. 기존 adb root recovery로 돌아와 로그를 읽습니다:
+1. Wait at least 60 seconds after booting. The touch worker starts after this delay.
+2. Test tapping the center of the screen, swiping from the bottom, scrolling, both volume buttons, and a short press of the power button.
+3. Leave Settings → General → About frozen for about two minutes.
+4. Return to your existing recovery environment with adb root access and retrieve the logs:
 
 ```sh
 python3 v60-touch/pull_log.py --out v60-touch5-log.txt
 ```
 
-Release bundle의 `v60-pull-touch-log.py`도 같은 도구입니다. **저장된 전체 로그**로
-설정/배경화면 문제를 분석합니다. 추출기는 userdata 끝의 기존4MiB 로그를 읽기만 합니다.
-XNU 실행 중에는 `sweetusb=0`이므로 adb 연결을 기대하지 않습니다.
+`v60-pull-touch-log.py` in the release bundle is the same tool. Use the **complete
+saved log** to investigate the Settings and wallpaper issues. The extractor only
+reads the existing 4 MiB log at the end of userdata.
+Do not expect an adb connection while XNU is running, because `sweetusb=0`.
 
-GUI 표시 뒤에는 inspect도 화면에 로그를 띄우지 않습니다. 최초 부팅 글자는 잠시
-보일 수 있습니다. inspect의 stack sample은 약90초 뒤, 이후120초 간격으로 기록됩니다.
-일반 사용 비교는 `touch5-gui`, 더 버벅이면 `touch5-balanced`로 합니다.
+Even the inspect build hides on-screen logs after the GUI appears. Initial boot
+text may appear briefly. Stack samples in inspect are recorded after about 90
+seconds, then every 120 seconds. Use `touch5-gui` for general usage comparisons;
+if it stutters more, try `touch5-balanced`.
 
-기존 이미지의 파일시스템 쓰기 옵션은 그대로입니다. 임시 부팅이라고 iOS 루트가
-읽기 전용인 것은 아닙니다. 이 저장소의 빌더/로그 추출기는 파티션을 플래시하지 않습니다.
+The existing image's filesystem write options are unchanged. A temporary boot
+does not mean the iOS root is read-only. This repository's builder and log
+extractor do not flash partitions.
 
-## 어떻게 만든 이미지인가
+## How the Images Are Made
 
-원본 GUI 부팅 이미지의 심볼과 고정 가상 주소를 확인하여, 비활성 터치 모듈 공간을
-`v60-touch/`의 독립 코드로 교체합니다. HID 좌표 상수3개와 touch5 버튼 상수2개,
-진단 문자열3개도 원래 값을 검증한 뒤 바꿉니다. wireless3에서는 인접한 미사용
-Redmi 전용 RPMh 코드 공간도 참조 검사 후 V60 전원/UART 코드에 사용합니다.
-shim·DTB·ADT·메모리·CPU 배치는 보존합니다.
+After checking the symbols and fixed virtual addresses in the original GUI boot
+image, the inactive touch module's space is replaced with standalone code from
+`v60-touch/`. Three HID coordinate constants, two touch5 button constants, and
+three diagnostic strings are also patched after verifying their original values.
+In wireless3, adjacent unused Redmi-specific RPMh code space is also used for
+V60 power/UART code after checking references.
+The shim, DTB, ADT, memory layout, and CPU layout are preserved.
 
-**성공한 boot2 이미지와 일치하는 전체 XNU 빌드 소스/커밋은 아직 확인되지 않았습니다.**
-이 저장소에는 기반 XNU 패치와 V60 수정이 있지만, 전체 커널을 재빌드하여 동일한
-boot2 이미지를 재현했다고 주장하지 않습니다. 최신 시험 이미지는 아래 **정확한 원본**이 필요합니다:
+**The complete XNU build source/commit matching the working boot2 image has not yet been identified.**
+This repository contains the base XNU patches and V60 changes, but does not claim
+to have reproduced the same boot2 image by rebuilding the entire kernel.
+The latest test images require the following **exact original image**:
 
 ```text
 v60-xnu-boot2-gui.img
@@ -100,12 +110,13 @@ SHA-256 6c916223cf86aca1caf13d4e490a20c519dfc7f315671bb494e643a2d31ab816
 Darwin 22.6.0 / xnu-8796.141.3
 ```
 
-빌더는 다른 입력(touch1~5 결과 이미지 포함)을 거부합니다. 다른 커널/슬라이드/기기에
-이 고정 주소 모듈을 적용하지 않습니다. 소스만으로 원본 전체 커널이 자동 생성되지는 않습니다.
+The builder rejects other inputs, including output images from touch1–5.
+Do not apply this fixed-address module to a different kernel, slide, or device.
+The source alone does not automatically produce the complete original kernel.
 
-## 터치 이미지 빌드
+## Building Touch Images
 
-Python3, AArch64 GCC/binutils가 필요합니다. 호스트 검사는 clang과 QEMU도 사용합니다.
+Python 3 and AArch64 GCC/binutils are required. Host checks also use clang and QEMU.
 
 ```sh
 # macOS
@@ -115,50 +126,55 @@ python3 v60-touch/test.py --out work/touch-tests
 python3 v60-touch/build.py /path/to/v60-xnu-boot2-gui.img --out work/touch5
 ```
 
-Linux에서는 `CROSS_COMPILE=aarch64-linux-gnu-`를 지정할 수 있습니다.
-버전별 구현은 Git 이력과 [소스 버전 표](docs/v60/HISTORY.md)에 남겨 두었습니다.
-최신 코드/시험 절차는 [v60-touch/README.md](v60-touch/README.md)를 참고하세요.
+On Linux, you can set `CROSS_COMPILE=aarch64-linux-gnu-`.
+Version-specific implementations are preserved in Git history and the
+[source version table](docs/v60/HISTORY.md).
+See [v60-touch/README.md](v60-touch/README.md) for the latest code and testing procedure.
 
-검사는 ASan/UBSan 보고서 해석·길이 검사, 독립 I²C 모의 슬레이브, QEMU printf ABI,
-모듈 크기/심볼/패치 범위, boot image ID, 체크섬을 포함합니다.
-호스트/QEMU 통과와 V60 실기기 성공은 서로 다른 결과입니다.
+Checks cover report parsing and length validation under ASan/UBSan, an independent
+I²C mock slave, the printf ABI under QEMU, module size/symbols/patch ranges,
+boot image IDs, and checksums.
+Passing host/QEMU checks and succeeding on a physical V60 are separate results.
 
-기반 XNU 전체 빌드 경로는 [xnu/README.md](xnu/README.md), 초기 V60 이식 도구는
-[V60-PORT.md](V60-PORT.md)를 참고하세요. `SWEET` 머신 이름과 기존 심볼은 기반
-코드의 빌드 식별자이므로 단순히 `V60`으로 치환하지 않습니다.
+For the full base XNU build process, see [xnu/README.md](xnu/README.md).
+For the initial V60 porting tools, see [V60-PORT.md](V60-PORT.md).
+The `SWEET` machine name and existing symbols are build identifiers in the base
+code; do not simply replace them with `V60`.
 
-## 이력과 하드웨어 자료
+## History and Hardware References
 
-- [shim test1~2c, touch1~5 진행/검증 기록](docs/v60/HISTORY.md)
-- [V60 하드웨어 주소·현재 미확인 항목](docs/v60/HARDWARE.md)
-- [shim 초기 bring-up](V60-BRINGUP.md), [test2b](V60-TEST2B.md), [test2c](V60-TEST2C.md)
-- [touch4 실험 설명](docs/v60/TOUCH4.md), [touch5 설명](v60-touch/README.md)
-- [버전별 manifest / SHA-256](docs/v60/releases/)
+- [Progress and verification history for shim test1–2c and touch1–5](docs/v60/HISTORY.md)
+- [V60 hardware addresses and currently unverified items](docs/v60/HARDWARE.md)
+- [Initial shim bring-up](V60-BRINGUP.md), [test2b](V60-TEST2B.md), [test2c](V60-TEST2C.md)
+- [touch4 experiment notes](docs/v60/TOUCH4.md), [touch5 documentation](v60-touch/README.md)
+- [Per-version manifests / SHA-256 checksums](docs/v60/releases/)
 
-## 저장소 구성
+## Repository Layout
 
-| 경로 | 내용 |
+| Path | Contents |
 | --- | --- |
-| `v60-touch/` | 최신 SW42902/GPIO I²C 모듈, 고정 이미지 빌더, 호스트/QEMU 검사, 로그 추출기 |
-| `shim/` | V60 기본 포트와 단계별 CPU/MMU/GIC 진단 코드 |
-| `tools/build-v60-diag.py` | 제공된 test1을 템플릿으로 진단 이미지 생성 |
-| `tools/` | ADT/payload/Android boot 이미지 및 기존 개발 도구 |
-| `xnu/patches/` | 기반 XNU 패치, 기존 V60 변경. 전체 빌드의 실기기 재현은 별도 |
-| `patches/v60/` | 최초 제공된 V60 shim 패치 |
-| `docs/v60/` | 관찰 결과·버전 이력·하드웨어 설명·manifest |
-| `NOTES.md` | 현재 V60 인계 및 분리 표시된 과거 upstream 기록 |
+| `v60-touch/` | Latest SW42902/GPIO I²C module, builder for the specific original image, host/QEMU checks, and log extractor |
+| `shim/` | Base V60 port and staged CPU/MMU/GIC diagnostic code |
+| `tools/build-v60-diag.py` | Generates diagnostic images using the supplied test1 image as a template |
+| `tools/` | ADT/payload/Android boot image tools and existing development tools |
+| `xnu/patches/` | Base XNU patches and existing V60 changes. On-device reproduction of a full build remains a separate task |
+| `patches/v60/` | Originally supplied V60 shim patch |
+| `docs/v60/` | Observations, version history, hardware documentation, and manifests |
+| `NOTES.md` | Current V60 handover notes and separately marked historical upstream records |
 
-원시 DT/파티션 덤프·시리얼·개인 로그·Apple 사용자 공간은 커밋하지 않습니다.
-잘못된 이름으로 올라와 있던 `live.dts`는 실제 DT가 아닌 `apply-v60-port.py`의
-동일 복사본이어서 제거했습니다. 실제 장치 트리 덤프는 빌드 소스에 포함하지 않습니다.
+Do not commit raw DT/partition dumps, serial numbers, personal logs, or Apple userspace files.
+The incorrectly named `live.dts` was removed because it was an identical copy of
+`apply-v60-port.py`, not an actual device tree. Actual device tree dumps are not
+included in the build source.
 
-## 기반 프로젝트와 출처
+## Base Project and Sources
 
-- [dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet) — XNU/부팅·디스플레이·HID 기반
+- [dipa-studio/ios-sweet](https://github.com/dipa-studio/ios-sweet) — XNU, boot, display, and HID foundation
 - [MomoYuuki/android_kernel_lge_sm8250](https://github.com/MomoYuuki/android_kernel_lge_sm8250)
-- [rofikkerneldev/kernel_lgv600tm_4.19](https://github.com/rofikkerneldev/kernel_lgv600tm_4.19) — 사용자 Android 커널 빌드 자료, SW42902/GPIO/클럭/SPMI 대조
+- [rofikkerneldev/kernel_lgv600tm_4.19](https://github.com/rofikkerneldev/kernel_lgv600tm_4.19) — User-provided Android kernel build references and SW42902/GPIO/clock/SPMI cross-checks
 - [Apple XNU](https://github.com/apple-oss-distributions/xnu)
 - [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build)
 
-대체 터치 모듈은 GPL-2.0-only이며 [라이선스](v60-touch/COPYING)를 포함합니다.
-기반 코드와 타사 구성 요소의 개별 라이선스/저작권 표시는 유지합니다.
+The replacement touch module is licensed under GPL-2.0-only and includes the
+[license](v60-touch/COPYING). Individual license and copyright notices for the
+base code and third-party components are retained.
