@@ -1,5 +1,21 @@
 # V60 local handoff — 2026-10-19
 
+## touch1 follow-up: no touch; photo has no driver result
+
+- User tested touch1 diag: touch still unavailable. Attached photo shows
+  a partial clock/UI and generic exec logs (xpcproxy, bluetoothd, fairplayd.H2,
+  remotemanagementd); no V60 TOUCH initialization/status line is visible.
+- Do not infer bus/power/firmware/HID failure, or driver success, from those
+  generic process logs. Need complete persistent console / early worker log.
+- Host adb inventory: zero devices. XNU boot args preserve sweetusb=0, so
+  no adb access while XNU runs is expected. Did not issue device commands.
+- Exposed existing read-only collector as outputs/v60-pull-touch-log.py and
+  instructions V60-TOUCH-LOG.md. It needs existing adb-root V60 recovery;
+  otherwise capture diag from boot including worker's ~60s startup interval.
+- No touch2 image or speculative hardware changes made in this follow-up.
+  NEXT: obtain log and locate first V60 TOUCH failure, or absence of init line.
+
+
 ## Latest V60: user supplied GUI-booting XNU; SW42902 touch1 experiment
 
 - User reports v60-xnu-boot2-gui.img boots to a black lock-style screen with
