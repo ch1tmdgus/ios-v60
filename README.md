@@ -1,3 +1,5 @@
+[![English](https://img.shields.io/badge/Language-English-blue?style=for-the-badge)](README.en.md)
+
 # iOS 16 on LG V60
 
 LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
