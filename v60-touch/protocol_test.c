@@ -24,7 +24,19 @@ int main(void){
  put(b+8,1);assert(v60_decode(b,sizeof(b),&f)==1);
  put(b+8,0x80000100);assert(v60_decode(b,sizeof(b),&f)==0 && f.mask==0);
  put(b+8,1<<8);point(b,0,15,1,0,0);assert(v60_decode(b,sizeof(b),&f)==0 && f.mask==0);
- assert(v60_decode(b,sizeof(b)-1,&f)==-1);
+ assert(v60_decode(b,47,&f)==-1);
+ put(b+4,5<<16);put(b+8,0);assert(v60_report_extra(b)==0 && v60_decode(b,48,&f)==0);
+ put(b+8,1<<8);point(b,0,0,1,50,100);
+ assert(v60_report_extra(b)==0 && v60_decode(b,48,&f)==0 && f.mask==1);
+ put(b+8,2<<8);point(b,1,1,2,80,150);
+ assert(v60_report_extra(b)==12 && v60_decode(b,60,&f)==0 && f.mask==3);
+ assert(v60_decode(b,59,&f)==-1);
+ put(b+8,10<<8);assert(v60_report_extra(b)==108);
+ put(b+8,11<<8);assert(v60_report_extra(b)==0 && v60_decode(b,156,&f)==-1);
+ put(b+8,(2<<8)|1);assert(v60_report_extra(b)==0);
+ put(b+8,2<<8);put(b+4,4<<16);assert(v60_report_extra(b)==108);
+ assert(v60_decode(b,11,&f)==-1);
+ puts("SW42902 flexible report planning/lengths: 9 checks PASS");
  puts("SW42902 packet decoder: 15 checks PASS");
  assert(v60_clock_ready(0x18008,0x80000002)); /* observed on V60 */
  assert(v60_clock_hwcg(0x18008,0x80000002));

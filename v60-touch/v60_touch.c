@@ -35,6 +35,9 @@ struct state {
     struct gpio_bus gpio;
     struct v60_bb bus;
 };
+static uint64_t counter(void) {
+    uint64_t v;__asm__ volatile("mrs %0, cntvct_el0" : "=r"(v));return v;
+}
 static uint32_t rd(uptr p,unsigned o) {
     uint32_t v=*(volatile uint32_t *)(p+o);
     __asm__ volatile("dmb oshld" ::: "memory"); return v;
@@ -158,7 +161,7 @@ static void worker(void *arg,int result) {
     kernel_bootarg("v60touchdelay",&delay_s,sizeof(delay_s));
     kernel_bootarg("v60touch",&mode,sizeof(mode));
     if(delay_s>300)delay_s=300;
-    logmsg("V60 TOUCH: touch4 GPIO-I2C SW42902 driver delay=%u mode=%d\n",delay_s,mode);
+    logmsg("V60 TOUCH: touch5 GPIO-I2C SW42902 driver delay=%u mode=%d\n",delay_s,mode);
     kernel_sleep(delay_s*1000);
     struct state s={0};
     s.gcc=kernel_io_map(0x100000,0x60000);
@@ -191,16 +194,23 @@ static void worker(void *arg,int result) {
     kernel_sleep(30);
     if(regwrite(&s,0xc03,0x8303)){logmsg("V60 TOUCH: U3 mode failed\n");goto out;}
     kernel_sleep(100);
-    logmsg("V60 TOUCH: polling 0x600, 10ms; finger events -> HID\n");
+    logmsg("V60 TOUCH: flex report 48+extra, poll 2ms; finger events -> HID\n");
     unsigned errors=0,frames=0,previous=0,reads=0,polls=0;
+    uint64_t freq;__asm__ volatile("mrs %0, cntfrq_el0" : "=r"(freq));
     while(!s.dead) {
         if(!(rd(s.south,0x27004)&1)) {
             uint8_t b[V60_REPORT_SIZE]={0};struct v60_frame f={0};
-            e=regread(&s,0x600,b,sizeof(b));
+            unsigned report_len=48;uint64_t began=counter();
+            e=regread(&s,0x600,b,report_len);
             if(!e) {
-                if(reads++<3)logmsg("V60 TOUCH: report header ic=%x tc=%x info=%x\n",
+                unsigned extra=v60_report_extra(b);
+                if(extra){e=regread(&s,0x60c,b+48,extra);report_len+=extra;}
+            }
+            if(!e) {
+                if(reads++<3)logmsg("V60 TOUCH: report bytes=%u bus_us=%llu ic=%x tc=%x info=%x\n",
+                    report_len,freq?(counter()-began)*1000000/freq:0,
                     v60_le32(b),v60_le32(b+4),v60_le32(b+8));
-                int d=v60_decode(b,sizeof(b),&f);
+                int d=v60_decode(b,report_len,&f);
                 if(d<0)e=-5;
                 else if(d==0 && ((v60_le32(b+4)>>16)&15)==5) {
                     report(&s,&f);frames++;
@@ -215,7 +225,7 @@ static void worker(void *arg,int result) {
         }
         if(++polls%3000==0)logmsg("V60 TOUCH: alive polls=%u reads=%u frames=%u irqpin=%u\n",
             polls,reads,frames,rd(s.south,0x27004)&1);
-        kernel_sleep(10);
+        kernel_sleep(2);
     }
     {struct v60_frame f={0};report(&s,&f);}
 out:

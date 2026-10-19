@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "gpio_i2c.h"
+#include "protocol.h"
 /* Independent edge-driven slave model. All bus observations are wired-AND. */
 struct sim {
  int release[2],slave_low,started,mode,nbits,ack_slot,address,next_read;
@@ -71,6 +72,14 @@ int main(void) {
  assert(!memcmp(rx,s.reply,4) && s.master_acks==3 && s.master_nacks==1);
  b=init(&s);uint8_t report[]={0x26,0x00};assert(v60_bb_xfer(&b,report,2,rx,156)==0);
  assert(!memcmp(rx,s.reply,156) && s.master_acks==155 && s.master_nacks==1);
+ /* Vendor two-part read: 48 bytes at600, then12 bytes at60c for2 contacts. */
+ b=init(&s);s.reply[4]=0;s.reply[5]=0;s.reply[6]=5;s.reply[7]=0;
+ s.reply[8]=0;s.reply[9]=2;s.reply[10]=0;s.reply[11]=0;
+ assert(v60_bb_xfer(&b,(uint8_t[]){0x26,0x00},2,rx,48)==0);
+ unsigned extra=v60_report_extra(rx);assert(extra==12);
+ assert(v60_bb_xfer(&b,(uint8_t[]){0x26,0x0c},2,rx+48,extra)==0);
+ assert(!memcmp(rx,s.reply,60) && s.starts==4 && s.stops==2);
+ assert(s.seen_n==8 && !memcmp(s.seen,(uint8_t[]){0x50,0x26,0,0x51,0x50,0x26,0x0c,0x51},8));
  b=init(&s);uint8_t wr[]={0x4c,0x03,0x03,0x83,0,0};assert(v60_bb_xfer(&b,wr,6,0,0)==0);
  assert(s.starts==1 && s.stops==1 && s.seen_n==7 && !memcmp(s.seen+1,wr,6));
  for(int n=1;n<=4;n++) {

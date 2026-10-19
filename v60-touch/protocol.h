@@ -10,13 +10,22 @@ struct v60_frame { uint32_t mask; int x[10], y[10]; };
 static inline uint32_t v60_le32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1]<<8 | (uint32_t)p[2]<<16 | (uint32_t)p[3]<<24;
 }
+/* Vendor flexible report: header + pen + first finger = 48 bytes.
+ * Additional register address = 0x600 + 48/4 = 0x60c.
+ */
+static inline unsigned v60_report_extra(const uint8_t *b) {
+    uint32_t h=v60_le32(b+8);
+    unsigned n=(h>>8)&31;
+    if((h&255)!=0 || n<=1 || n>10)return 0;
+    return (((v60_le32(b+4)>>16)&15)==5)?12*(n-1):108;
+}
 /* 0: absolute report; 1: non-absolute report; -1: malformed. */
 static inline int v60_decode(const uint8_t *b, unsigned len, struct v60_frame *f) {
-    if (len < V60_REPORT_SIZE) return -1;
+    if (len < 36) return -1;
     uint32_t h = v60_le32(b+8);
     if ((h & 255) != 0) return 1;
     unsigned n = (h >> 8) & 31;
-    if (n > 10) return -1;
+    if (n > 10 || len < 36+12*n) return -1;
     f->mask = 0;
     uint32_t seen = 0;
     if (h >> 31) return 0; /* palm_bit: release fingers */

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replace only the disabled touch module in one exact, symbol-bearing XNU boot image.
+"""Replace the touch module and guarded HID/key constants in one exact XNU boot image.
 Never flashes a device. No support for other kernels or slid kernel images.
 """
 import argparse,hashlib,json,os,struct,subprocess
@@ -71,30 +71,50 @@ SECTIONS {{
   assert struct.unpack_from('<I',payload,off)[0]==old
   struct.pack_into('<I',payload,off,new)
   hid_changes.append({'va':hex(va),'payload_offset':off,'old':hex(old),'new':hex(new)})
+ # Existing SPMI observer input driver: V60 volume-up is PM8150 SID0 GPIO6.
+ # PON stays SID0 peripheral08. GPIO6 is c000+(6-1)*100 = c500, PPID 0c5.
+ # Only APID search target changes; observer reads use low 8-bit offsets.
+ key_changes=[]
+ for va,old,new in [
+  (0xfffffe00074e89ec,0x5298200c,0x5280000c|(0xc500<<5)),
+  (0xfffffe00074e89f0,0x72a0008c,0x72a0000c),
+ ]:
+  sg=next(v for v in segments if v[0]<=va<v[0]+v[3]);off=sg[2]+va-sg[0]
+  assert struct.unpack_from('<I',payload,off)[0]==old
+  struct.pack_into('<I',payload,off,new)
+  key_changes.append({'va':hex(va),'payload_offset':off,'old':hex(old),'new':hex(new)})
+ text_changes=[]
+ for old,new in [(b'gpio4:c110',b'gpio0:c510'),(b'gpio4-apid',b'gpio0-apid'),(b'GPIO2 not confirmed',b'GPIO6 not confirmed')]:
+  assert len(old)==len(new) and ramdisk.count(old)==1
+  off=ramdisk.index(old);assert payload[off:off+len(old)]==old
+  payload[off:off+len(old)]=new
+  text_changes.append({'payload_offset':off,'old':old.decode(),'new':new.decode()})
  original_cmd=ramdisk[0x48:0x2a8].split(b'\0')[0].decode()
  manifests=[]
- for name,mode,console in [('gui',1,1),('diag',1,0),('probe',2,0)]:
+ for name,mode,hz,sample in [('gui',1,60,'-'),('balanced',1,30,'-'),('inspect',1,60,'Preferences,SpringBoard,backboardd'),('probe',2,30,'-')]:
   p=bytearray(payload)
-  cmd=original_cmd.replace('sweetfb_noconsole=1',f'sweetfb_noconsole={console}')+f' v60touch={mode} v60touchdelay=60'
+  cmd=original_cmd.replace('sweetkeys=0','sweetkeys=1').replace('sweetfb_hz=30',f'sweetfb_hz={hz}').replace(' -enable_kprintf_spam','')+f' v60touch={mode} v60touchdelay=60 sweetiolog={'Preferences' if name=='inspect' else '-'} sweetsample={sample}'
   encoded=cmd.encode();assert len(encoded)<608
   p[0x48:0x2a8]=encoded+bytes(608-len(encoded))
   # No Mach-O layout, ADT, segment descriptor, framebuffer or shim modifications.
-  assert p[:0x48]==ramdisk[:0x48] and p[0x2a8:patchoff]==ramdisk[0x2a8:patchoff]
+  assert p[:0x48]==ramdisk[:0x48] and p[0x2a8:0x400]==ramdisk[0x2a8:0x400]
   expected=bytearray(ramdisk)
   expected[0x48:0x2a8]=p[0x48:0x2a8]
   expected[patchoff:patchoff+len(code)]=code
-  for change in hid_changes:struct.pack_into('<I',expected,change['payload_offset'],int(change['new'],16))
+  for change in hid_changes+key_changes:struct.pack_into('<I',expected,change['payload_offset'],int(change['new'],16))
+  for change in text_changes:
+   off=change['payload_offset'];value=change['new'].encode();expected[off:off+len(value)]=value
   assert p==expected
   h=bytearray(image[:ps]);digest=hashlib.sha1()
   for part in [kernel,p,b'',b'',dtb]:digest.update(part);digest.update(struct.pack('<I',len(part)))
   h[576:608]=digest.digest()+bytes(12)
   pad=lambda b:b+bytes(align(len(b))-len(b))
   boot=bytes(h)+pad(kernel)+pad(p)+pad(dtb)
-  path=out/f'v60-xnu-touch4-{name}.img';path.write_bytes(boot)
-  manifests.append({'file':path.name,'sha256':sha(boot),'cmdline':cmd,'mode':mode})
- report={'baseline_sha256':BASE_SHA,'method':'in-place replacement of disabled touch module; same fixed kernel VA layout',
+  path=out/f'v60-xnu-touch5-{name}.img';path.write_bytes(boot)
+  manifests.append({'file':path.name,'sha256':sha(boot),'cmdline':cmd,'mode':mode,'present_hz_target':hz,'process_samples':sample})
+ report={'baseline_sha256':BASE_SHA,'method':'touch module replacement plus guarded HID/key constants; fixed kernel VA layout',
          'module_va':hex(START),'module_limit':hex(END),'module_size':len(code),'payload_patch_offset':hex(patchoff),
-         'hid_literal_changes':hid_changes,
+         'hid_literal_changes':hid_changes,'key_literal_changes':key_changes,'log_text_changes':text_changes,
          'original_code_sha256':sha(ramdisk[patchoff:patchoff+len(code)]),'module_sha256':sha(code),
          'preserved':{'shim_sha256':sha(kernel),'dtb_sha256':sha(dtb)},'outputs':manifests}
  (out/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')

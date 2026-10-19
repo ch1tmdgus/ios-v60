@@ -1,5 +1,40 @@
 # V60 local handoff — 2026-10-19
 
+## touch5: touch4 HARDWARE WORKS; buttons, flexible reports, quiet GUI
+
+- User reports touch4 actual touch works. New requests: power/volume buttons,
+  stutter/slow response, hide screen logs, black wallpaper, Settings/About hangs.
+  Clarification: tapping About hangs/no response, not confirmed app crash.
+- Source-verified flexible reports in vendor sw42902_irq_read_data: first48
+  bytes (12hdr+24pen+12finger), extra at600+48/4=60c for additional contacts.
+  New planner and variable-length decoder retain bounds; GPIO bit timing5us
+  unchanged. Poll sleep10->2ms. First3 reads log byte count/counter-based bus_us.
+- Button source: named pinctrl pm8150 SID0 GPIO6 (gpio_keys pinctrl-0=660
+  resolves key_vol_up_default phandle660, pinsgpio6); PON SID0 bit0/1 power/down.
+  Note supplied gpio_keys gpios cell66a does NOT match pm8150 controller661;
+  named state identifies intended pin but dump phandle inconsistency remains.
+  Existing read-only SPMI driver patched APID target4c1->0c5 via exact two
+  instructions at74e89ec/f0; low-byte register offsets unchanged. Updated3
+  label strings. Enabled sweetkeys=1; still requires GPIO input/enabled checks.
+  No PMIC config/reset writes; hardware buttons UNTESTED.
+- Keep GUI console-muted and persistent log; remove spam arg, GUI tracing/sampler
+  disabled. Target copy cap60Hz, balanced30Hz fallback. Inspected actual present
+  and memcpy; CPU copy + rearm16.667ms remains, NO measured60fps or GPU claim.
+- inspect is also quiet but sweetiolog=Preferences and sampler Preferences,
+  SpringBoard,backboardd first90sec then120sec. Have user reproduce About hang
+  and retain it2min before recovery pull. Updated collector also prints keys
+  and Preferences sampler lines; need full file for root/UI causes.
+- Black wallpaper/About NOT fixed and no cause proven. Prior Redmi URL capacity
+  crash is not evidence of current About hang. No matching userland/root files
+  available; adb inventory0 devices. No root edits/mounts or flashing performed.
+- Local checks PASS: ASan/UBSan decoder15+flex9+clock11+engine11; wired-AND
+  bus model includes48+12-byte split and60c address; QEMU printf ABI; wrong
+  baseline refusal. Module6206/9064 bytes, guarded compile/patch checks passed.
+- NEXT: hardware touch5-inspect test buttons/scroll, About2min then full log;
+  compare balanced if60Hz costs CPU. Resolve About blocked call/wallpaper assets
+  using actual samples/log, and verify PMIC mapping/permissions from key logs.
+
+
 ## touch4: GSI-only confirmed, GPIO software-I2C alternative implemented
 
 - Actual user touch3 log flush14: FIFO_IF_DISABLE=1, TXwidth32/depth16,

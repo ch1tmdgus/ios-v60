@@ -23,7 +23,7 @@ def main():
  ring=area[4096:4096+ring_size]
  data=ring[:total] if total<=ring_size else ring[total%ring_size:]+ring[:total%ring_size]
  a.out.write_text(data.decode('utf-8','replace').replace('\r',''))
- print(f'Read-only log saved: {a.out}; flush={seq}; V60 TOUCH lines:')
+ print(f'Read-only log saved: {a.out}; flush={seq}; V60 input / sampler lines:')
  for line in a.out.read_text().splitlines():
-  if 'V60 TOUCH' in line:print(line)
+  if any(tag in line for tag in ['V60 TOUCH','SWEET KEYS','SMP ---','SMP Preferences']):print(line)
 if __name__=='__main__':main()
