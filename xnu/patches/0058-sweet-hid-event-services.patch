@@ -21044,7 +21044,7 @@
 +	IOLockLock(fLock);
 +	bool was = fDown[finger];
 +	IOFixed nx = (IOFixed)(((int64_t)x << 16) / 1080);
-+	IOFixed ny = (IOFixed)(((int64_t)y << 16) / 2400);
++	IOFixed ny = (IOFixed)(((int64_t)y << 16) / 2460);
 +	bool moved = down && (nx != fX[finger] || ny != fY[finger]);
 +	if (was == down && !moved) {
 +		IOLockUnlock(fLock);

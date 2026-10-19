@@ -36,7 +36,7 @@
 +	PE_parse_boot_argn("sweetfb_native", &native, sizeof(native));
 +	fLogicalW = fWidth;
 +	fLogicalH = fHeight;
-+	if (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {
++	if (!native && fWidth <= SWEET_FB_LOGICAL_W) {
 +		fLogicalW = SWEET_FB_LOGICAL_W;
 +		fLogicalH = SWEET_FB_LOGICAL_H;
 +	}
@@ -104,9 +104,9 @@
 +	int native = 0;
 +	PE_parse_boot_argn("sweetfb_native", &native, sizeof(native));
 +	fLogicalW = native ? 1080 : 1125;
-+	fLogicalH = native ? 2400 : 2436;
++	fLogicalH = native ? 2460 : 2436;
 +	fOffX = (fLogicalW - 1080) / 2;
-+	fOffY = (fLogicalH - 2400) / 2;
++	fOffY = (fLogicalH - 2460) / 2;   /* -12: 2436-row iPhone X view letterboxed in 2460 rows */
  	/* The digitizer covers the main display (backboardd maps it 1:1). */
  	setProperty("DisplayIntegrated", kOSBooleanTrue);
  	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */
@@ -115,7 +115,7 @@
  	IOLockLock(fLock);
  	bool was = fDown[finger];
 -	IOFixed nx = (IOFixed)(((int64_t)x << 16) / 1080);
--	IOFixed ny = (IOFixed)(((int64_t)y << 16) / 2400);
+-	IOFixed ny = (IOFixed)(((int64_t)y << 16) / 2460);
 +	/* Panel pixels -> the presented 1125x2436 display (SweetFramebuffer.cpp). */
 +	IOFixed nx = (IOFixed)(((int64_t)(x + fOffX) << 16) / fLogicalW);
 +	IOFixed ny = (IOFixed)(((int64_t)(y + fOffY) << 16) / fLogicalH);
