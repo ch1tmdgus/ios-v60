@@ -7,6 +7,8 @@ r=Path(__file__).resolve().parent;pre=os.environ.get('CROSS_COMPILE','aarch64-el
 def run(*cmd):subprocess.run(list(map(str,cmd)),check=True,timeout=30)
 run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/'protocol_test.c','-o',a.out/'protocol_test')
 run(a.out/'protocol_test')
+run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/'gpio_i2c_test.c','-o',a.out/'gpio_i2c_test')
+run(a.out/'gpio_i2c_test')
 run(pre+'gcc','-c',r/'printf_bridge.S','-o',a.out/'bridge.o')
 run(pre+'gcc','-c',r/'tests/printf_bridge_test.S','-o',a.out/'bridge_test.o')
 run(pre+'ld','-T',r/'tests/printf_bridge_test.ld',a.out/'bridge_test.o',a.out/'bridge.o','-o',a.out/'bridge_test.elf')

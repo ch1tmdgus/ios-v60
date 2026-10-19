@@ -90,7 +90,7 @@ SECTIONS {{
   h[576:608]=digest.digest()+bytes(12)
   pad=lambda b:b+bytes(align(len(b))-len(b))
   boot=bytes(h)+pad(kernel)+pad(p)+pad(dtb)
-  path=out/f'v60-xnu-touch3-{name}.img';path.write_bytes(boot)
+  path=out/f'v60-xnu-touch4-{name}.img';path.write_bytes(boot)
   manifests.append({'file':path.name,'sha256':sha(boot),'cmdline':cmd,'mode':mode})
  report={'baseline_sha256':BASE_SHA,'method':'in-place replacement of disabled touch module; same fixed kernel VA layout',
          'module_va':hex(START),'module_limit':hex(END),'module_size':len(code),'payload_patch_offset':hex(patchoff),

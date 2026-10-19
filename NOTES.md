@@ -1,5 +1,39 @@
 # V60 local handoff — 2026-10-19
 
+## touch4: GSI-only confirmed, GPIO software-I2C alternative implemented
+
+- Actual user touch3 log flush14: FIFO_IF_DISABLE=1, TXwidth32/depth16,
+  RXwidth32/depth32, reason2. All branches ready1; GENI status0. No touch
+  chip commands executed in touch3. GSI-only is now observation, not guess.
+- Inspected vendor drivers/dma/qcom/gpi.c (DMA rings/coherent allocation and
+  mapping), msm_gpi.h, i2c-algo-bit.c, pinctrl-kona.c and kona-pinctrl.dtsi.
+  Full GSI/DMA/IOMMU port not implemented. Chose GPIO software-I2C as alternate
+  transport; do NOT describe touch4 as GSI implementation or hardware fix proven.
+- gpio_i2c.h implements 0x28 single-master open-drain START/write/ACK/repeated
+  START/read/final NACK/STOP with bounded SCL polling; loss/timeout releases
+  bus, no forced recovery. Production gpio callback only pulls LOW or releases
+  using OE9 with OUT1 latch0. SDA36/SCL37 assignment remains hardware test.
+- Takeover requires GENI master/slave idle and GPIO mux/OE readback; no GENI
+  register or DMA writes. Restores original two bus configs/output latches on
+  worker exit. Keeps prior GCC clock-ready policy to read GENI state.
+- Power-on now follows vendor order: VCL67 high,1ms,VDD68 high,10ms,reset38high,
+  100ms. Never reset-low, PMIC/RPMh or firmware writes. ID10/proto4 guard before
+  touch config/HID. Logs power, line states, rc/phase, first3 raw report headers,
+  periodic polls/reads/frames/IRQ. Probe mode reads only chip ID/product after
+  SoC power/pin setup, then restores bus. Touch remains UNTESTED on hardware.
+- Host independent wired-AND edge slave checks address/data/MSB order, combined
+  4-byte read,156-byte report,6-byte write, four NACK phases, stuck SDA/SCL,
+  midtransfer timeout/arbitration/stretch/bounds; ASan/UBSan. Also retains
+  packet15/clock11/old-engine11 and QEMU Apple-varargs checks.
+- Local checks PASS: edge-model (including STOP timeout after NACK),
+  ASan/UBSan, decoder15/clock11/engine11, QEMU printf ABI. Guarded module
+  build5993/9064 bytes, no globals/unresolved imports, bounded edits.
+- NEXT: user boots touch4-diag, waits60+s, tests taps/swipe, collects full V60
+  TOUCH lines. Check SDA/SCL idle values, power readback and first probe rc/phase.
+  If ACK/ID works inspect report headers/contacts, otherwise diagnose actual
+  GPIO ownership/pullups/power/timing. No speculative DMA or FIFO-disable writes.
+
+
 ## touch3: isolate FIFO-disabled / GSI-only blocker after touch2 log
 
 - User device touch2 flush14: all five branches ready1. SE13 fw303 status0,

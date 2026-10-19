@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include "protocol.h"
 #include "clock_policy.h"
-#include "engine_policy.h"
+#include "gpio_i2c.h"
 typedef unsigned long uptr;
 extern uptr kernel_io_map(uptr, uptr);
 extern int kernel_thread_start(void (*)(void *, int), void *, uptr *);
@@ -22,25 +22,18 @@ extern void kernel_hid_touch(int, int, int, int);
 /* Assembly bridge converts AAPCS64 register varargs to Apple's stack varargs. */
 extern int logmsg(const char *, ...);
 
-#define STATUS 0x40
-#define FW 0x68
-#define CMD 0x600
-#define CTRL 0x604
-#define IRQ 0x610
-#define CLR 0x618
-#define TX 0x700
-#define RX 0x780
-#define TXCNT 0x800
-#define RXCNT 0x804
-#define DONE 1u
-#define ERRORS (0x1eu|(1u<<9)|(1u<<10)|(1u<<12)|(1u<<13)|(3u<<24)|(3u<<28))
-#define EVENTS (DONE|ERRORS|(1u<<26)|(1u<<27)|(1u<<30))
+struct gpio_bus {
+    uptr tile;
+    uint32_t saved_cfg[2],saved_out[2],cfg[2];
+    int owned;
+};
 struct state {
     uptr se,gcc,south,north;
-    uint32_t active, last_irq;
-    unsigned txdepth, rxdepth;
+    uint32_t active,last_phase;
     int dead;
     int x[10],y[10];
+    struct gpio_bus gpio;
+    struct v60_bb bus;
 };
 static uint32_t rd(uptr p,unsigned o) {
     uint32_t v=*(volatile uint32_t *)(p+o);
@@ -92,88 +85,59 @@ static int clocks(struct state *s) {
     }
     return 0;
 }
-static int engine(struct state *s) {
-    uint32_t fw=rd(s->se,FW),tx=rd(s->se,0xe24),rx=rd(s->se,0xe28);
-    uint32_t iface=rd(s->se,0x64),status=rd(s->se,STATUS);
-    logmsg("V60 TOUCH: SE13 fw=%x status=%x tx=%x rx=%x\n",fw,status,tx,rx);
-    s->txdepth=v60_fifo_depth(tx);s->rxdepth=v60_fifo_depth(rx);
-    logmsg("V60 TOUCH: FIFO_IF_DISABLE=%x tx_width=%u tx_depth=%u rx_width=%u rx_depth=%u\n",
-        iface,v60_fifo_width(tx),s->txdepth,v60_fifo_width(rx),s->rxdepth);
-    enum v60_engine_result reason=v60_engine_check(fw,iface,status,tx,rx);
-    if(reason!=V60_ENGINE_OK) {
-        logmsg("V60 TOUCH: engine blocked reason=%u (1=protocol 2=GSI 3=width 4=depth 5=busy)\n",reason);
-        if(reason==V60_ENGINE_GSI)
-            logmsg("V60 TOUCH: GSI-only interface; FIFO transport unavailable; stop before GPIO/chip commands\n");
-        return -1;
+static void gpio_set(void *ctx,unsigned line,int release) {
+    struct gpio_bus *g=ctx;
+    /* OUT latch stays zero; OE=0 releases, OE=1 pulls low. */
+    wr(g->tile,(36+line)*0x1000,g->cfg[line]|(release?0:0x200));
+}
+static int gpio_get(void *ctx,unsigned line) {
+    struct gpio_bus *g=ctx;return rd(g->tile,(36+line)*0x1000+4)&1;
+}
+static void gpio_restore(struct gpio_bus *g) {
+    if(!g->owned)return;
+    for(unsigned i=0;i<2;i++) {
+        unsigned o=(36+i)*0x1000;
+        wr(g->tile,o,g->cfg[i]); /* release before restoring latch/mux */
+        wr(g->tile,o+4,(rd(g->tile,o+4)&~2u)|g->saved_out[i]);
+        wr(g->tile,o,g->saved_cfg[i]);
     }
-    if((rd(s->se,TXCNT)&0xfffffff)||(rd(s->se,RXCNT)&0x1ffffff)) {
-        logmsg("V60 TOUCH: inherited FIFO data; stop\n");return -1;
+    g->owned=0;
+}
+static int gpio_take(struct state *s) {
+    struct gpio_bus *g=&s->gpio;g->tile=s->south;
+    /* Never remux a running GENI master or slave. No GENI/GSI register writes. */
+    uint32_t status=rd(s->se,0x40);
+    logmsg("V60 TOUCH: GPIO transport SE13 status=%x FIFO_IF_DISABLE=%x\n",status,rd(s->se,0x64));
+    if(status&0x1001){logmsg("V60 TOUCH: GENI busy; GPIO takeover refused\n");return -1;}
+    for(unsigned i=0;i<2;i++) {
+        unsigned o=(36+i)*0x1000;
+        g->saved_cfg[i]=rd(g->tile,o);g->saved_out[i]=rd(g->tile,o+4)&2;
+        g->cfg[i]=g->saved_cfg[i]&~0x3ffu; /* mux0, input, no pull, 2mA */
     }
-    wr(s->se,0xe18,0);wr(s->se,0xe1c,0);wr(s->se,0x644,0);
-    wr(s->se,CLR,0xffffffff);wr(s->se,0x648,0xffffffff);wr(s->se,0x258,0);
-    wr(s->se,0x28,rd(s->se,0x28)|0x7f);wr(s->se,0xe30,rd(s->se,0xe30)|15);
-    wr(s->se,0x24,0x7f);wr(s->se,0x20,1);wr(s->se,0x7c,0);
-    wr(s->se,0x48,(7u<<4)|1);wr(s->se,0x278,(10u<<20)|(11u<<10)|26);
-    wr(s->se,0x254,0);
-    wr(s->se,0x260,0x7f8fe);wr(s->se,0x264,0xffefe);
-    wr(s->se,0x284,0x7f8fe);wr(s->se,0x288,0xffefe);
-    wr(s->se,0x80c,1);wr(s->se,0x810,0);wr(s->se,0x814,s->rxdepth-1);
-    wr(s->se,0x614,EVENTS);
-    if(rd(s->se,0x260)!=0x7f8fe || rd(s->se,0x284)!=0x7f8fe)return -1;
+    g->owned=1;
+    for(unsigned i=0;i<2;i++) {
+        unsigned o=(36+i)*0x1000;
+        /* Release under existing mux first, then preload LOW and select GPIO. */
+        wr(g->tile,o,g->saved_cfg[i]&~0x200u);
+        wr(g->tile,o+4,rd(g->tile,o+4)&~2u);
+        wr(g->tile,o,g->cfg[i]);
+        if((rd(g->tile,o)&0x3ff)!=0){logmsg("V60 TOUCH: GPIO mux/OE readback failed pin=%u\n",36+i);return -1;}
+    }
+    s->bus=(struct v60_bb){g,gpio_set,gpio_get,kernel_delay,0};
     return 0;
-}
-static void abort_own(struct state *s) {
-    wr(s->se,CTRL,2);
-    int ok=0;
-    for(unsigned i=0;i<5000;i++) {if(rd(s->se,IRQ)&(1u<<5)){ok=1;break;}kernel_delay(1);}
-    if(!ok || clear_wait(s->se,STATUS,1))s->dead=1;
-    for(unsigned i=0;i<s->rxdepth && (rd(s->se,RXCNT)&0x1ffffff);i++)(void)rd(s->se,RX);
-    wr(s->se,CLR,0xffffffff);
-    if(rd(s->se,TXCNT)&0xfffffff)s->dead=1;
-}
-static int msg(struct state *s,const uint8_t *tx,unsigned nt,uint8_t *rx,unsigned nr,int stretch) {
-    if(s->dead || nt>6 || nr>V60_REPORT_SIZE || (nt&&nr) || (!nt&&!nr))return -1;
-    if(clear_wait(s->se,STATUS,1)){s->dead=1;return -2;}
-    wr(s->se,CLR,0xffffffff);wr(s->se,nr?0x270:0x26c,nr?nr:nt);
-    wr(s->se,CMD,((nr?2u:1u)<<27)|(0x28u<<9)|(stretch?4:0));
-    unsigned sent=0,got=0;
-    for(unsigned i=0;i<20000;i++) {
-        uint32_t irq=rd(s->se,IRQ);s->last_irq=irq;
-        if(irq&ERRORS) {
-            /* A completed NACK may leave an idle clean engine: no spurious abort. */
-            if((irq&DONE) && !(rd(s->se,STATUS)&1) && !(rd(s->se,TXCNT)&0xfffffff) && !(rd(s->se,RXCNT)&0x1ffffff)) {
-                wr(s->se,CLR,irq);return -3;
-            }
-            break;
-        }
-        if(nt && (irq&(1u<<30))) {
-            unsigned count=rd(s->se,TXCNT)&0xfffffff;
-            if(count>s->txdepth)break;
-            for(unsigned free=s->txdepth-count;free && sent<nt;--free) {
-                uint32_t word=0;for(unsigned j=0;j<4 && sent<nt;j++)word|=(uint32_t)tx[sent++]<<(j*8);
-                wr(s->se,TX,word);
-            }
-        }
-        unsigned count=rd(s->se,RXCNT)&0x1ffffff;
-        if(count>s->rxdepth)break;
-        while(count--) {
-            uint32_t word=rd(s->se,RX);
-            for(unsigned j=0;j<4 && got<nr;j++)rx[got++]=(uint8_t)(word>>(j*8));
-        }
-        if(irq&DONE) {wr(s->se,CLR,irq);if(sent==nt && got==nr)return 0;break;}
-        wr(s->se,CLR,irq&((1u<<26)|(1u<<27)|(1u<<30)));kernel_delay(1);
-    }
-    abort_own(s);return -4;
 }
 static int regread(struct state *s,unsigned reg,uint8_t *buf,unsigned n) {
     uint8_t ptr[2]={(uint8_t)((n>4?0x20:0)|((reg>>8)&15)),(uint8_t)reg};
-    int e=msg(s,ptr,2,0,0,1);if(e)return e;
-    return msg(s,0,0,buf,n,0);
+    int e=v60_bb_xfer(&s->bus,ptr,2,buf,n);s->last_phase=s->bus.phase;
+    if(e==BB_TIMEOUT || e==BB_ARB || e==BB_BUSY)s->dead=1;
+    return e;
 }
 static int regwrite(struct state *s,unsigned reg,uint32_t value) {
     uint8_t b[6]={(uint8_t)(0x40|((reg>>8)&15)),(uint8_t)reg,
                  (uint8_t)value,(uint8_t)(value>>8),(uint8_t)(value>>16),(uint8_t)(value>>24)};
-    return msg(s,b,6,0,0,0);
+    int e=v60_bb_xfer(&s->bus,b,6,0,0);s->last_phase=s->bus.phase;
+    if(e==BB_TIMEOUT || e==BB_ARB || e==BB_BUSY)s->dead=1;
+    return e;
 }
 static void report(struct state *s,const struct v60_frame *f) {
     for(unsigned i=0;i<10;i++) {
@@ -194,7 +158,7 @@ static void worker(void *arg,int result) {
     kernel_bootarg("v60touchdelay",&delay_s,sizeof(delay_s));
     kernel_bootarg("v60touch",&mode,sizeof(mode));
     if(delay_s>300)delay_s=300;
-    logmsg("V60 TOUCH: touch3 SW42902 driver delay=%u mode=%d\n",delay_s,mode);
+    logmsg("V60 TOUCH: touch4 GPIO-I2C SW42902 driver delay=%u mode=%d\n",delay_s,mode);
     kernel_sleep(delay_s*1000);
     struct state s={0};
     s.gcc=kernel_io_map(0x100000,0x60000);
@@ -204,33 +168,38 @@ static void worker(void *arg,int result) {
     if(!s.gcc||!s.south||!s.north||!s.se){logmsg("V60 TOUCH: mapping failed\n");goto out;}
     logmsg("V60 TOUCH: GPIO38=%x GPIO39=%x GPIO67=%x GPIO68=%x\n",
         rd(s.south,0x26004),rd(s.south,0x27004),rd(s.north,0x43004),rd(s.north,0x44004));
-    if(clocks(&s)||engine(&s))goto out;
-    pin(s.south,36,1,0,0);pin(s.south,37,1,0,0); /* GENI13 SDA/SCL */
+    if(clocks(&s)||gpio_take(&s))goto out;
     pin(s.south,39,0,3,0); /* active-low IRQ input, polling only */
+    pin(s.north,67,0,0,1);kernel_sleep(1); /* VCL high: vendor POWER_ON order */
     pin(s.north,68,0,0,1);kernel_sleep(10); /* VDD high */
-    pin(s.north,67,0,0,1);kernel_sleep(10); /* VCL high */
     pin(s.south,38,0,3,1);kernel_sleep(100); /* release reset, never pull low */
+    logmsg("V60 TOUCH: power reset=%x irq=%x vcl=%x vdd=%x\n",
+        rd(s.south,0x26004),rd(s.south,0x27004),rd(s.north,0x43004),rd(s.north,0x44004));
+    logmsg("V60 TOUCH: GPIO-I2C SDA36=%u SCL37=%u half_delay=5us\n",
+        gpio_get(&s.gpio,0),gpio_get(&s.gpio,1));
     uint8_t version[4]={0},pid[8]={0};
     int e=regread(&s,0x642,version,4);
-    logmsg("V60 TOUCH: probe 0x28 rc=%d version=%x irq=%x\n",e,v60_le32(version),s.last_irq);
+    logmsg("V60 TOUCH: probe 0x28 rc=%d version=%x phase=%x\n",e,v60_le32(version),s.last_phase);
     if(e || version[2]!=10 || (version[3]&15)!=4){logmsg("V60 TOUCH: SW42902 identity not confirmed; stop\n");goto out;}
     e=regread(&s,0x644,pid,8);
     logmsg("V60 TOUCH: product rc=%d words=%x/%x\n",e,v60_le32(pid),v60_le32(pid+4));
     if(mode==2){logmsg("V60 TOUCH: probe complete; controller config unchanged\n");goto out;}
     /* Volatile operating settings from sw42902_init / tc_driving(U3). */
     if(regwrite(&s,0xfe4,0)||regwrite(&s,0xc00,1)||regwrite(&s,0xc01,1)||regwrite(&s,0xc03,4)) {
-        logmsg("V60 TOUCH: device init failed irq=%x\n",s.last_irq);goto out;
+        logmsg("V60 TOUCH: device init failed phase=%x\n",s.last_phase);goto out;
     }
     kernel_sleep(30);
     if(regwrite(&s,0xc03,0x8303)){logmsg("V60 TOUCH: U3 mode failed\n");goto out;}
     kernel_sleep(100);
     logmsg("V60 TOUCH: polling 0x600, 10ms; finger events -> HID\n");
-    unsigned errors=0,frames=0,previous=0;
+    unsigned errors=0,frames=0,previous=0,reads=0,polls=0;
     while(!s.dead) {
         if(!(rd(s.south,0x27004)&1)) {
             uint8_t b[V60_REPORT_SIZE]={0};struct v60_frame f={0};
             e=regread(&s,0x600,b,sizeof(b));
             if(!e) {
+                if(reads++<3)logmsg("V60 TOUCH: report header ic=%x tc=%x info=%x\n",
+                    v60_le32(b),v60_le32(b+4),v60_le32(b+8));
                 int d=v60_decode(b,sizeof(b),&f);
                 if(d<0)e=-5;
                 else if(d==0 && ((v60_le32(b+4)>>16)&15)==5) {
@@ -239,15 +208,18 @@ static void worker(void *arg,int result) {
                 }
             }
             if(e) {
-                if((errors++%100)==0)logmsg("V60 TOUCH: report rc=%d irq=%x\n",e,s.last_irq);
+                if((errors++%100)==0)logmsg("V60 TOUCH: report rc=%d phase=%x\n",e,s.last_phase);
                 if(errors>=10){struct v60_frame f={0};report(&s,&f);}
                 if(errors>=100)break;
             } else errors=0;
         }
+        if(++polls%3000==0)logmsg("V60 TOUCH: alive polls=%u reads=%u frames=%u irqpin=%u\n",
+            polls,reads,frames,rd(s.south,0x27004)&1);
         kernel_sleep(10);
     }
     {struct v60_frame f={0};report(&s,&f);}
 out:
+    gpio_restore(&s.gpio);
     logmsg("V60 TOUCH: worker stopped\n");
     kernel_thread_terminate(kernel_current_thread());
     for(;;)kernel_sleep(1000);
