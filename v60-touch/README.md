@@ -1,4 +1,4 @@
-# V60 SW42902 touch2 — 실기기 시험용
+# V60 SW42902 touch3 — 실기기 시험용
 
 현재 상태는 **코드 작성·빌드·정적 검사 완료, V60 실기기 터치 미검증**입니다.
 전체 XNU 소스가 없어 커널 전체를 재빌드한 결과가 아닙니다. 제공된 특정
@@ -6,36 +6,41 @@
 이 폴더의 코드로 교체하고 HID 좌표 상수 세 개를 보정한 실험 이미지입니다.
 
 
-## touch2 변경: HWCG 클럭 준비 판정
+## touch3 변경: GENI 중단 조건 분리 진단
 
-실기기 touch1 로그는 다음 위치에서 종료됐습니다:
+touch2 실기기 결과는 모든 branch가 ready=1이며 다음 설정을 읽었습니다:
 
 ```text
-GCC vote=c3c0040 cfg=100000 dfs=21
-clock halted off=18008 value=80000002
-worker stopped
+SE13 fw=303 status=0 tx=20102864 rx=20204800
+need idle ABL-loaded I2C firmware and 32-bit FIFO; stop
 ```
 
-이 시점에는 `engine()` 및 터치 칩 ID 읽기를 아직 실행하지 않았습니다.
-GPIO 상태 로그의 0은 전원 설정 전 읽은 값이므로 전원 설정 실패의 증거가 아닙니다.
+Rofik `include/linux/qcom-geni-se.h` 정의로 해석하면 I2C protocol=3,
+TX width=32/depth=16, RX width=32/depth=32입니다. 이 값들은 기존 조건을
+통과합니다. 기존 로그에 빠진 FIFO_IF_DISABLE bit0가 중단 원인일 가능성이
+높지만, 이전 검사는 STATUS를 다시 읽으므로 그 사이 active 상태가 변했을
+가능성까지 로그만으로 배제하지 않습니다.
 
-`gcc-kona.c`의 wrap1 S_AHB는 offset=0x18008, hwcg_bit=1입니다.
-`clk-branch.c:clk_branch_wait()`는 HWCG가 켜져 있으면 HALT 대기를 생략합니다.
-touch1에는 이 예외가 없어서 HWCG idle 상태를 실패로 처리했습니다.
+이번 버전은 FW/IF/STATUS/폭/깊이를 저장해 같은 값으로 판정하고,
+`FIFO_IF_DISABLE=...` 및 `engine blocked reason=...`을 출력합니다.
+reason=1 protocol, 2 GSI, 3 width, 4 depth, 5 busy입니다.
 
-touch2는 해당 레지스터의 HWCG 비트가 1일 때만 같은 예외를 적용합니다.
-다른 네 클럭의 HALT 검사는 유지하고 요청한 clock vote의 읽기값도 확인합니다.
-HWCG 비트를 강제로 끄거나, 모든 HALT 오류를 무시하는 변경은 하지 않았습니다.
-각 branch의 offset/value/hwcg/ready를 추가로 로그에 남깁니다.
-`ready=1`은 소스의 준비 판정을 통과했다는 뜻으로 실제 I2C 통신 성공은 별도입니다.
+V60 `i2c-qcom-geni.c:geni_i2c_runtime_resume()`는 FIFO disable 상태에서
+GSI_ONLY를 선택합니다. touch3는 **GSI DMA 구현이나 터치 수정 완료 이미지가
+아닌 진단 버전**입니다. GSI 상태이면 기존처럼 전원 GPIO/터치 칩 명령 전에
+멈추며, read-only IF 레지스터에 쓰거나 검사 조건을 우회하지 않습니다.
+HWCG 클럭 수정은 유지합니다. 현재 GSI-only 기기에서 FIFO 통신은 지원하지 않습니다.
 
-새 판정의 회귀 검사 11개는 제공 로그의 `0x80000002`를 허용하고,
-HWCG 비트가 없거나 다른 branch가 같은 값을 보이는 경우에는 실패 처리함을 확인합니다.
-이 수정으로 첫 조기 중단 원인을 고쳤지만, 이후 펌웨어·전원·칩 응답·HID는 아직
-실기기에서 확인하지 못했습니다.
+먼저 `v60-xnu-touch3-diag.img`를 임시 부팅하고 60초 이상 기다린 뒤,
+기존 recovery에서 아래처럼 로그를 추출해 주세요:
 
-먼저 `v60-xnu-touch2-diag.img`로 부팅해 같은 방식으로 로그를 수집해 주세요.
-GUI/diag/probe는 같은 새 코드를 사용하며 표시 옵션과 모드만 다릅니다.
+```sh
+python3 v60-pull-touch-log.py --out v60-touch3-log.txt
+```
+
+GUI/diag/probe는 같은 진단 코드를 쓰며 표시 옵션과 모드만 다릅니다.
+GSI=1이 확인되면 다음 단계는 wrapper1 SE5의 GPI/GSI 전송 및 DMA 메모리/
+IOMMU 경로 조사·구현이며, FIFO 검사를 삭제하는 것으로 해결되지 않습니다.
 
 ## 확인한 원인과 하드웨어
 
@@ -64,7 +69,7 @@ Rofik 커널 7eab1a7189a7aba0a0c4a30ba616619e097ced52에서 다음을 대조했�
 정상 부팅됐던 boot2 이미지를 보관하고, **임시 부팅**으로 시험합니다:
 
 ```sh
-fastboot boot v60-xnu-touch2-gui.img
+fastboot boot v60-xnu-touch3-gui.img
 ```
 
 드라이버는 커널 초기화 후 기본 60초를 기다렸다가 시작합니다.
@@ -80,20 +85,20 @@ fastboot boot v60-xnu-touch2-gui.img
 ## 안 되면 로그용 이미지
 
 ```sh
-fastboot boot v60-xnu-touch2-diag.img
+fastboot boot v60-xnu-touch3-diag.img
 ```
 
 동일한 터치 동작을 시도하되 커널 콘솔을 켭니다. `V60 TOUCH:` 줄을
 촬영해 주세요. GUI가 콘솔 글자를 덮을 수 있으므로 영상이나 영구 로그가 유용합니다.
 
-`v60-xnu-touch2-probe.img`는 SoC clock/GPIO/GENI를 설정한 뒤 칩 ID만 읽고
+`v60-xnu-touch3-probe.img`는 SoC clock/GPIO/GENI를 설정한 뒤 칩 ID만 읽고
 종료하는 비교용입니다. 이 모드는 컨트롤러의 동작 제어 레지스터를 쓰지 않지만,
 SoC 레지스터·전원 GPIO 변경은 수행하므로 완전한 하드웨어 읽기 전용 검사는 아닙니다.
 
 정상적인 초기화 로그 예시(아직 실기기에서 관찰한 결과가 아님):
 
 ```text
-V60 TOUCH: touch2 SW42902 driver delay=60 mode=1
+V60 TOUCH: touch3 SW42902 driver delay=60 mode=1
 V60 TOUCH: SE13 fw=... status=... tx=... rx=...
 V60 TOUCH: probe 0x28 rc=0 version=... irq=...
 V60 TOUCH: polling 0x600, 10ms; finger events -> HID
@@ -102,8 +107,8 @@ V60 TOUCH: contacts=1 frames=...
 
 다음 결과에 따라 추가 작업이 필요합니다:
 
-- `need idle ABL-loaded I2C firmware`: 해당 GENI에 올바른 펌웨어가 없거나
-  사용할 수 없는 상태. 이 버전은 펌웨어를 업로드하지 않고 중단합니다.
+- `engine blocked reason=...`: 위 원인 번호와 FIFO_IF_DISABLE 값을 확인합니다.
+  reason=2이면 GSI 전송 구현이 필요하며 이 버전은 중단합니다.
 - `unsupported DFS0` / `clock halted`: 클럭 상태가 가정과 다름. 상태를 기록하고 중단합니다.
 - `probe ... rc=...` 또는 identity 확인 실패: 버스/전원/프로토콜을 추가 진단해야 합니다.
 - `contacts=...`는 뜨는데 UI 반응 없음: 이후 HID 서비스·좌표·사용자 공간 경로를 조사합니다.
@@ -155,7 +160,7 @@ python3 v60-touch/test.py --out work/touch-tests
 
 수행한 확인:
 
-- SW42902 패킷 해석 15개 및 클럭 판정 11개 검사, AddressSanitizer/UndefinedBehaviorSanitizer 통과.
+- SW42902 패킷 해석 15개 및 클럭 판정 11개 및 GENI capability 판정 11개 검사, AddressSanitizer/UndefinedBehaviorSanitizer 통과.
 - Apple arm64 varargs stack slot 및 FP/LR 보존을 QEMU로 확인.
   Apple-target clang의 실제 호출 코드와도 stack layout을 대조.
 - 모듈 크기 제한, 미해결 심볼/전역 BSS/데이터 없음 확인.

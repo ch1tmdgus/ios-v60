@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include "protocol.h"
 #include "clock_policy.h"
+#include "engine_policy.h"
 typedef unsigned long uptr;
 extern uptr kernel_io_map(uptr, uptr);
 extern int kernel_thread_start(void (*)(void *, int), void *, uptr *);
@@ -93,11 +94,17 @@ static int clocks(struct state *s) {
 }
 static int engine(struct state *s) {
     uint32_t fw=rd(s->se,FW),tx=rd(s->se,0xe24),rx=rd(s->se,0xe28);
-    logmsg("V60 TOUCH: SE13 fw=%x status=%x tx=%x rx=%x\n",fw,rd(s->se,STATUS),tx,rx);
-    s->txdepth=(tx>>16)&63;s->rxdepth=(rx>>16)&63;
-    if(((fw>>8)&255)!=3 || (rd(s->se,0x64)&1) || ((tx>>24)&63)!=32 || ((rx>>24)&63)!=32 ||
-       s->txdepth<2 || s->rxdepth<2 || (rd(s->se,STATUS)&0x1001)) {
-        logmsg("V60 TOUCH: need idle ABL-loaded I2C firmware and 32-bit FIFO; stop\n");return -1;
+    uint32_t iface=rd(s->se,0x64),status=rd(s->se,STATUS);
+    logmsg("V60 TOUCH: SE13 fw=%x status=%x tx=%x rx=%x\n",fw,status,tx,rx);
+    s->txdepth=v60_fifo_depth(tx);s->rxdepth=v60_fifo_depth(rx);
+    logmsg("V60 TOUCH: FIFO_IF_DISABLE=%x tx_width=%u tx_depth=%u rx_width=%u rx_depth=%u\n",
+        iface,v60_fifo_width(tx),s->txdepth,v60_fifo_width(rx),s->rxdepth);
+    enum v60_engine_result reason=v60_engine_check(fw,iface,status,tx,rx);
+    if(reason!=V60_ENGINE_OK) {
+        logmsg("V60 TOUCH: engine blocked reason=%u (1=protocol 2=GSI 3=width 4=depth 5=busy)\n",reason);
+        if(reason==V60_ENGINE_GSI)
+            logmsg("V60 TOUCH: GSI-only interface; FIFO transport unavailable; stop before GPIO/chip commands\n");
+        return -1;
     }
     if((rd(s->se,TXCNT)&0xfffffff)||(rd(s->se,RXCNT)&0x1ffffff)) {
         logmsg("V60 TOUCH: inherited FIFO data; stop\n");return -1;
@@ -187,7 +194,7 @@ static void worker(void *arg,int result) {
     kernel_bootarg("v60touchdelay",&delay_s,sizeof(delay_s));
     kernel_bootarg("v60touch",&mode,sizeof(mode));
     if(delay_s>300)delay_s=300;
-    logmsg("V60 TOUCH: touch2 SW42902 driver delay=%u mode=%d\n",delay_s,mode);
+    logmsg("V60 TOUCH: touch3 SW42902 driver delay=%u mode=%d\n",delay_s,mode);
     kernel_sleep(delay_s*1000);
     struct state s={0};
     s.gcc=kernel_io_map(0x100000,0x60000);

@@ -1,5 +1,29 @@
 # V60 local handoff — 2026-10-19
 
+## touch3: isolate FIFO-disabled / GSI-only blocker after touch2 log
+
+- User device touch2 flush14: all five branches ready1. SE13 fw303 status0,
+  TX20102864 RX20204800; old generic engine condition stopped before GPIO/chip.
+- Compared exact vendor include/linux/qcom-geni-se.h and platform/msm helper:
+  protocol3 I2C; TX width32 depth16; RX width32 depth32. Those pass old checks.
+  Unlogged IF_FIFO_DISABLE bit0 most likely explains stop; transient STATUS
+  reread is also possible. Do NOT claim IF value observed until touch3 result.
+- Vendor i2c-qcom-geni runtime_resume selects GSI_ONLY when IF disable set.
+  DT SE13 a94000 DMA phandles are gpi_dma1 TX/RX channel index5 protocol3.
+- touch3 saves capability/status snapshot once, prints IF and decoded fields,
+  distinguishes protocol/GSI/width/depth/busy. Retains stop for GSI before
+  engine writes, GPIO power or touch-chip commands. No transport fix claimed.
+- Added engine_policy.h + 11 host checks for observed values / alternate failure
+  cases. Build still guarded against original boot2-gui hash, preserves layout.
+- Local validation: 15 decoder + 11 clock + 11 engine checks under ASan/UBSan,
+  QEMU printf ABI test and guarded build passed; module5621/9064 bytes.
+  Builder verified exact bounded payload edits and unchanged shim/DTB.
+- NEXT: collect touch3 FIFO_IF_DISABLE and reason. If GSI-only confirmed,
+  implement actual wrapper1 SE5 GPI/GSI plus DMA/IOMMU path from vendor sources.
+  No blanket FIFO bypass, no writes to IF_FIFO_DISABLE_RO. Device touch remains
+  unavailable. Hardware touch3 result pending.
+
+
 ## touch2: fix HWCG halt-policy mismatch found in touch1 device log
 
 - User successfully pulled persistent ring, flush=43. V60 TOUCH lines:

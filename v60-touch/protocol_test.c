@@ -3,6 +3,7 @@
 #include <string.h>
 #include "protocol.h"
 #include "clock_policy.h"
+#include "engine_policy.h"
 static void put(uint8_t *p,uint32_t v){for(int i=0;i<4;i++)p[i]=(uint8_t)(v>>(8*i));}
 static void point(uint8_t *b,int slot,unsigned id,unsigned ev,unsigned x,unsigned y){put(b+36+12*slot,id|(ev<<16)|(x<<18));put(b+40+12*slot,y);}
 int main(void){
@@ -36,5 +37,18 @@ int main(void){
  assert(!v60_clock_ready(0x23140,0x80000002));
  assert(!v60_clock_ready(0x185fc,0x80000002));
  assert(v60_clock_ready(0x185fc,0));
- puts("Clock gating policy: 11 checks PASS");return 0;
+ puts("Clock gating policy: 11 checks PASS");
+ const uint32_t tx=0x20102864,rx=0x20204800;
+ assert(v60_fifo_width(tx)==32 && v60_fifo_depth(tx)==16);
+ assert(v60_fifo_width(rx)==32 && v60_fifo_depth(rx)==32);
+ assert(v60_engine_check(0x303,0,0,tx,rx)==V60_ENGINE_OK);
+ assert(v60_engine_check(0x303,1,0,tx,rx)==V60_ENGINE_GSI);
+ assert(v60_engine_check(0x303,1,1,tx,rx)==V60_ENGINE_GSI);
+ assert(v60_engine_check(0x203,0,0,tx,rx)==V60_ENGINE_PROTOCOL);
+ assert(v60_engine_check(0x303,0,0,0x10100000,rx)==V60_ENGINE_WIDTH);
+ assert(v60_engine_check(0x303,0,0,tx,0x20010000)==V60_ENGINE_DEPTH);
+ assert(v60_engine_check(0x303,0,1,tx,rx)==V60_ENGINE_BUSY);
+ assert(v60_engine_check(0x303,0,0x1000,tx,rx)==V60_ENGINE_BUSY);
+ assert(v60_engine_check(0x303,0,0x100,tx,rx)==V60_ENGINE_OK);
+ puts("GENI capability policy: 11 checks PASS");return 0;
 }
