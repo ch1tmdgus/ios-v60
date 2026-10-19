@@ -23,7 +23,7 @@ def safe_path(s):
 def firmware_candidate(path):
  p=PurePosixPath(path);n=p.name.lower()
  if not safe_path(path) or any(x in n for x in ('mac','address','persist','calibration')):return False
- return bool(re.fullmatch(r'bdwlan\.[be][0-9a-f]{2,3}',n)) or bool(re.fullmatch(r'(?:amss(?:20)?|m3|bdwlan[^/]*|rampatch[^/]*|nvm[^/]*|crbtfw[^/]*|crnv[^/]*|qca6390[^/]*)\.(?:bin|mbn|elf|tlv)',n))
+ return bool(re.fullmatch(r'bdwlan\.[be][0-9a-f]{2,3}',n)) or bool(re.fullmatch(r'(?:amss(?:20)?|m3|bdwlan[^/]*|rampatch[^/]*|nvm[^/]*|crbtfw[^/]*|crnv[^/]*|htbtfw[0-9a-f]+|htnv[0-9a-f]+|qca6390[^/]*)\.(?:bin|mbn|elf|tlv)',n))
 
 def inside(path,roots):
  return safe_path(path) and any(path==r or path.startswith(r.rstrip('/')+'/') for r in roots)

@@ -57,6 +57,8 @@ class CollectorTest(unittest.TestCase):
   self.assertFalse(m.firmware_candidate('/vendor/etc/wifi/wpa_supplicant.conf'))
   self.assertTrue(m.firmware_candidate('/vendor/firmware/qca6390/amss20.bin'))
   self.assertTrue(m.firmware_candidate('/vendor/firmware/qca6390/bdwlan.b30'))
+  self.assertTrue(m.firmware_candidate('/vendor/firmware/htbtfw20.tlv'))
+  self.assertTrue(m.firmware_candidate('/vendor/firmware/htnv20.bin'))
  def test_mount_options(self):
   self.assertEqual(m.mount_options('ext4'),'ro,noload')
   self.assertEqual(m.mount_options('vfat'),'ro')

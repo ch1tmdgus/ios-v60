@@ -62,8 +62,11 @@ python3 tools/v60-wireless-collect.py --include-firmware --mount-vendor-ro --out
 - 파일당16MiB/합계96MiB 제한. 기존 출력 ZIP은 덮어쓰지 않습니다.
 
 2026-10-20 실제 recovery에서 modem을 읽기 전용 마운트해 Wi-Fi firmware/board
-파일30개를 수집했고, ZIP 무결성과 임시 mount 해제를 확인했습니다. Bluetooth firmware는
-아직 확보하지 못했습니다. 현재 recovery에는 vendor logical block 장치가 없습니다.
+파일30개를 수집했고, ZIP 무결성과 임시 mount 해제를 확인했습니다. 추가로 현재 slot의 `super` metadata와 vendor ext4의 필요한 범위만 읽어
+`htbtfw20.tlv`(202300 bytes), `htnv20.bin`(5775 bytes)도 확보했습니다.
+두 TLV의 구조/길이를 검사했습니다. 파일의 ROM build는0x200이지만 실제 칩의
+HCI revision과 일치하는지는 아직 확인하지 않았습니다. NVM 값은 비공개로 유지합니다.
+현재 recovery에는 vendor logical block 장치가 없어 이 단계는 별도의 로컬 분석으로 수행했습니다.
 `recovery` ADB 상태를 허용하고, 원격 실패 상태를 전달하는 `adb shell -T`를 사용하며,
 독립 `blkid`가 없으면 `toybox blkid`를 사용합니다. 관련 모의 검사15개도 통과했습니다.
 firmware가0개면 `report.json`의 mount 결과/경로를 확인합니다.
@@ -74,9 +77,17 @@ firmware가0개면 `report.json`의 mount 결과/경로를 확인합니다.
 
 ## 다음 단계
 
-1. 수집 자료로 firmware/board/NVM 파일과 UART 구성을 확정합니다.
+1. 확보한 BT/Wi-Fi 파일을 사용하되, 실제 HCI revision과 Wi-Fi board ID를 먼저 확인합니다.
 2. Bluetooth 전원·GENI UART를 분리해 구현하고 HCI revision 응답부터 확인합니다.
 3. 별도로 Wi-Fi PCIe endpoint/MHI boot를 구현한 후 실제 firmware handshake를 검증합니다.
 4. transport 성공 이후에 각각 iOS 서비스/네트워크 연결을 구현합니다.
 
 스캔/페어링/연결 성공은 아직 없습니다. 현재 동작하는 touch5 이미지는 그대로 유지합니다.
+
+확보한 Bluetooth 파일의 구조 확인은 아래 도구로 오프라인에서 할 수 있습니다.
+NVM은 tag ID와 길이만 출력하며 MAC 등 tag 값은 출력하지 않습니다.
+
+```sh
+python3 tools/v60-bt-firmware-info.py /private/path/htbtfw20.tlv
+python3 tools/v60-bt-firmware-info.py /private/path/htnv20.bin
+```

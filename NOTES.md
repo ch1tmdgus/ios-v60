@@ -1,3 +1,32 @@
+# Bluetooth vendor input acquired — 2026-10-20
+
+- Continued autonomously after user objected to stopping at collection status.
+  Recovery remains connected. No additional user extraction is needed.
+- Read super geometry and metadata slot1 for current boot slot_b, validated
+  SHA256 geometry/header/tables against AOSP liblp metadata_format.h.
+  vendor_b has one linear extent, 795361280 bytes. No dm mapping/mount/write.
+  Private exploratory ext4 reader read bounded selected metadata/file ranges
+  directly over adb shell-T dd; no whole-super or vendor dump was made.
+- ACQUIRED vendor_b:/firmware/htbtfw20.tlv (202300 bytes) and htnv20.bin
+  (5775 bytes) into work/wireless-reference/bluetooth-private, outside Git.
+  Firmware product16, ROMbuild0x200, patch0x3899, download_mode3; this is FILE
+  metadata, NOT the live HCI ROM revision. NVM has50 structurally valid tags.
+  NVM tag2 can contain a device address; keep bytes private, do not publish.
+- Added offline v60-bt-firmware-info.py using vendor btqca.h TLV layouts:
+  length/internal bounds validation, patch fields, NVM IDs/lengths only.
+  No NVM values printed/modified. Both actual files pass. 18 combined tests
+  pass including malformed input/privacy and collection regressions.
+- Collector now recognizes actual Hastings htbtfw/htnv filenames when vendor
+  is accessible. It does not yet extract logical vendor from super itself.
+  Private reader is exploratory, single verified extent and not distributed.
+- NEXT implementation milestone: GENI SE6 UART transport/power sequencing with
+  bounded HCI revision request, then compare live controller revision to file.
+  Need XNU MMIO/clock/pinctrl/regulator implementation and space/build integration;
+  do not send firmware based solely on filename. Current module slack2.8KiB is
+  insufficient for full wireless stack. Full kernel provenance still unresolved.
+  No BT HCI command, radio enable, firmware download or device boot attempted.
+  Wi-Fi PCIe/MHI/datapath and iOS service integration still unimplemented.
+
 # Wireless recovery collection — 2026-10-20
 
 - Fixed user-facing rejection of a single `adb devices` state `recovery`.
