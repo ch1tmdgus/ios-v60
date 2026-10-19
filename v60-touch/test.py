@@ -9,6 +9,8 @@ run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined
 run(a.out/'protocol_test')
 run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/'gpio_i2c_test.c','-o',a.out/'gpio_i2c_test')
 run(a.out/'gpio_i2c_test')
+run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/'wireless_probe_test.c','-o',a.out/'wireless_probe_test')
+run(a.out/'wireless_probe_test')
 run(pre+'gcc','-c',r/'printf_bridge.S','-o',a.out/'bridge.o')
 run(pre+'gcc','-c',r/'tests/printf_bridge_test.S','-o',a.out/'bridge_test.o')
 run(pre+'ld','-T',r/'tests/printf_bridge_test.ld',a.out/'bridge_test.o',a.out/'bridge.o','-o',a.out/'bridge_test.elf')

@@ -234,6 +234,9 @@ out:
     kernel_thread_terminate(kernel_current_thread());
     for(;;)kernel_sleep(1000);
 }
+#ifdef V60_WIRELESS_PROBE
+#include "wireless_probe.h"
+#endif
 __attribute__((section(".text.entry"))) void v60_touch_init(void) {
     int enable=1;uptr thread=0;
     kernel_bootarg("v60touch",&enable,sizeof(enable));
@@ -241,6 +244,11 @@ __attribute__((section(".text.entry"))) void v60_touch_init(void) {
     int e=kernel_thread_start(worker,0,&thread);
     if(!e)kernel_thread_deallocate(thread);
     else logmsg("V60 TOUCH: thread creation failed %d\n",e);
+#ifdef V60_WIRELESS_PROBE
+    e=kernel_thread_start(wireless_worker,0,&thread);
+    if(!e)kernel_thread_deallocate(thread);
+    else logmsg("V60 WIRELESS: thread creation failed %d\n",e);
+#endif
 }
 /* GCC may lower large automatic zero-initializers to memset even freestanding. */
 void *memset(void *p,int c,size_t n) {

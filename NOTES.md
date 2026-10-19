@@ -1,3 +1,26 @@
+# wireless1 diagnostic image built — 2026-10-20
+
+- User explicitly requested an actual image. Built outputs/v60-xnu-wireless1-diag.img
+  SHA25662595de38768c75380d8951de5505592662d8bb0b854bacd3a5a7fa90bba7de9,
+  17625088 bytes, bundle outputs/v60-wireless1-test.zip. NOT DEVICE BOOT-TESTED.
+- Opt-in build.py --wireless-probe compiles independent wireless worker90s;
+  retains touch5 module/buttons and quiet display, target30Hz. Module7845/9064.
+  Votes wrap0 AHB/core/core2x/SE6 branches, preserving other bits; source/PLL and
+  radio/regulators untouched. Gated SE6 reads only after all5 branches ready.
+  HALT poll bounded5ms/branch; HWCGbit1 accepted ONLY for wrap0S_AHB17008.
+  Reads GPIO16..21/124, GENI SE6@998000 protocol/clock/FIFO-capability/FIFO/IRQ status;
+  no RX FIFO data read, IRQ clear, HCI, reset, radio/PMIC/PCIe/DMA writes.
+  Wi-Fi observation in this image is limited to WLAN_EN/SW_CTRL pin state.
+- pull_log.py recognizes V60 WIRELESS lines; copied to standalone outputs.
+- ASan/UBSan actual probe function mocks PASS: all5 HALT gates, success, map
+  failure, vote rejection, time bounds, preserved votes/no UART reads if notready.
+  Existing touch protocol/I2C and QEMU Apple-varargs checks PASS. Default build
+  regenerated all4 touch5 images byte-identical to prior outputs.
+- docs/v60/WIRELESS1.md documents precise test and scope. User should temporary
+  fastboot boot image, wait3min, return to existing recovery, pull full log.
+  Do not claim a connection fix. Need actual firmware protocol/clock/pin/power
+  evidence before implementing UART/HCI or committing regulator sequences.
+
 # Bluetooth vendor input acquired — 2026-10-20
 
 - Continued autonomously after user objected to stopping at collection status.

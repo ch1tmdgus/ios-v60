@@ -16,7 +16,7 @@ IMPORTS={
 }
 def sha(b):return hashlib.sha256(b).hexdigest()
 def main():
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('image',type=Path);ap.add_argument('--out',required=True,type=Path);a=ap.parse_args()
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('image',type=Path);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--wireless-probe',action='store_true');a=ap.parse_args()
  image=a.image.read_bytes()
  if sha(image)!=BASE_SHA:raise SystemExit('REFUSED: input SHA256 does not match the inspected v60-xnu-boot2-gui.img')
  root=Path(__file__).resolve().parent;out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -34,6 +34,7 @@ def main():
  prefix=os.environ.get('CROSS_COMPILE','aarch64-elf-')
  flags=['-Os','-ffreestanding','-nostdlib','-fno-builtin','-fno-pic','-fno-stack-protector',
         '-mgeneral-regs-only','-mstrict-align','-ffixed-x18','-Wall','-Wextra','-Werror']
+ if a.wireless_probe:flags.append('-DV60_WIRELESS_PROBE=1')
  for name in ['v60_touch.c','printf_bridge.S']:
   subprocess.run([prefix+'gcc',*flags,'-c',str(root/name),'-o',str(out/(Path(name).stem+'.o'))],check=True)
  script='ENTRY(v60_touch_init)\n'+''.join(f'{k} = 0x{v:x};\n' for k,v in IMPORTS.items())+f'''
@@ -91,7 +92,9 @@ SECTIONS {{
   text_changes.append({'payload_offset':off,'old':old.decode(),'new':new.decode()})
  original_cmd=ramdisk[0x48:0x2a8].split(b'\0')[0].decode()
  manifests=[]
- for name,mode,hz,sample in [('gui',1,60,'-'),('balanced',1,30,'-'),('inspect',1,60,'Preferences,SpringBoard,backboardd'),('probe',2,30,'-')]:
+ profiles=[('gui',1,60,'-'),('balanced',1,30,'-'),('inspect',1,60,'Preferences,SpringBoard,backboardd'),('probe',2,30,'-')]
+ if a.wireless_probe:profiles=[('diag',1,30,'-')]
+ for name,mode,hz,sample in profiles:
   p=bytearray(payload)
   cmd=original_cmd.replace('sweetkeys=0','sweetkeys=1').replace('sweetfb_hz=30',f'sweetfb_hz={hz}').replace(' -enable_kprintf_spam','')+f' v60touch={mode} v60touchdelay=60 sweetiolog={'Preferences' if name=='inspect' else '-'} sweetsample={sample}'
   encoded=cmd.encode();assert len(encoded)<608
@@ -110,9 +113,10 @@ SECTIONS {{
   h[576:608]=digest.digest()+bytes(12)
   pad=lambda b:b+bytes(align(len(b))-len(b))
   boot=bytes(h)+pad(kernel)+pad(p)+pad(dtb)
-  path=out/f'v60-xnu-touch5-{name}.img';path.write_bytes(boot)
+  prefix_name='wireless1' if a.wireless_probe else 'touch5'
+  path=out/f'v60-xnu-{prefix_name}-{name}.img';path.write_bytes(boot)
   manifests.append({'file':path.name,'sha256':sha(boot),'cmdline':cmd,'mode':mode,'present_hz_target':hz,'process_samples':sample})
- report={'baseline_sha256':BASE_SHA,'method':'touch module replacement plus guarded HID/key constants; fixed kernel VA layout',
+ report={'wireless_probe':a.wireless_probe,'baseline_sha256':BASE_SHA,'method':'touch module replacement plus guarded HID/key constants; fixed kernel VA layout',
          'module_va':hex(START),'module_limit':hex(END),'module_size':len(code),'payload_patch_offset':hex(patchoff),
          'hid_literal_changes':hid_changes,'key_literal_changes':key_changes,'log_text_changes':text_changes,
          'original_code_sha256':sha(ramdisk[patchoff:patchoff+len(code)]),'module_sha256':sha(code),

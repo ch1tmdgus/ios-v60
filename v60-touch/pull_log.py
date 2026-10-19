@@ -25,5 +25,5 @@ def main():
  a.out.write_text(data.decode('utf-8','replace').replace('\r',''))
  print(f'Read-only log saved: {a.out}; flush={seq}; V60 input / sampler lines:')
  for line in a.out.read_text().splitlines():
-  if any(tag in line for tag in ['V60 TOUCH','SWEET KEYS','SMP ---','SMP Preferences']):print(line)
+  if any(tag in line for tag in ['V60 TOUCH','V60 WIRELESS','SWEET KEYS','SMP ---','SMP Preferences']):print(line)
 if __name__=='__main__':main()

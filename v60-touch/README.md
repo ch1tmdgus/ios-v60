@@ -145,3 +145,8 @@ python3 v60-touch/build.py /path/to/v60-xnu-boot2-gui.img --out work/touch-build
 
 touch4의 실기기 터치는 사용자가 확인했습니다. touch5의 버튼 동작도 사용자 확인됐습니다. 실제 지연/fps 변화는 아직 정량 측정하지 못했습니다. 펌웨어 업로드/erase/PMIC/RPMh/reset LOW/기기 플래시는
 이번 코드에 포함하지 않습니다. 절전·펜·듀얼스크린 지원도 아직 없습니다.
+
+
+Opt-in wireless hardware probe: see [WIRELESS1](../docs/v60/WIRELESS1.md).
+Build with `python3 v60-touch/build.py ORIGINAL.img --wireless-probe --out OUTPUT`.
+Default builds retain the previous touch5 image bytes.
