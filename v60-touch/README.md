@@ -150,3 +150,6 @@ touch4의 실기기 터치는 사용자가 확인했습니다. touch5의 버튼 
 Opt-in wireless hardware probe: see [WIRELESS1](../docs/v60/WIRELESS1.md).
 Build with `python3 v60-touch/build.py ORIGINAL.img --wireless-probe --out OUTPUT`.
 Default builds retain the previous touch5 image bytes.
+
+Next UART FIFO transport test: [WIRELESS2](../docs/v60/WIRELESS2.md).
+Use `--wireless-loopback` instead of `--wireless-probe` to build wireless2.

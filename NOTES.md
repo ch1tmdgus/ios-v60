@@ -1,3 +1,31 @@
+# wireless1 hardware result and wireless2 build — 2026-10-20
+
+- USER ACTUAL wireless1 log: all5 wrap0/SE6 branches ready, GCC vote c3d03c0,
+  SE6 fw/sfw203, status0, FIFO_DISABLE0, DMA0, TX/RX status0, TX32/depth16,
+  RX32/depth32. RCGR0 cfg100000 M/N/D0 DFS8020; M_CLK11 S_CLK0.
+  GPIO16..19 all mux0 (GPIO); WLAN_EN20/BT_EN21/SW_CTRL124 low.
+  GENI UART firmware is present; this is NOT controller firmware/HCI success.
+- Built wireless2 opt-in --wireless-loopback. outputs/v60-xnu-wireless2-diag.img
+  SHA2564ee36e602b589bd6d02384d794d60fe7fcd80bbd4937906fc9cd6f80a8583ec2,
+  module8992/9064bytes. Bundle outputs/v60-wireless2-test.zip includes log puller,
+  manifest and instructions. WIRELESS2.md documents test. NOT DEVICE-TESTED.
+- Keeps touch/buttons/quiet30Hz target; worker90s. Same proven clock gate, then
+  SE6-internal8N1 FIFO transport loopback with2 distinct words. Preconditions:
+  UART2 firmware M+S, FIFO available/32bit/depth>0, idle/clean/no DMA/GSI.
+  IRQ router masked. Waits20ms bounded, cancels+aborts own commands, restores
+  saved configuration when idle. No GPIO/pinmux/radio/HCI/PMIC/DMA/PCIe writes.
+- ASan/UBSan actual-code model PASS:2-word success, capability+ownership guards,
+  TX/RX/start timeouts, bad echo/count/error IRQ, cancel/abort failures and
+  config restore. Existing clock/touch/I2C/QEMU Apple ABI checks PASS.
+  Rebuilt wireless1 + all4 default touch5 images reproduce previous hashes.
+- Supplied DT verified rail phandles: a7 AON/DIG=pm8150_s6, a9 RFA1=pm8150_s5,
+  aa RFA2=pm8150a_s8 (resource smpc8). Android enables RPMh regulators before
+  BT_EN. External Bluetooth baud/pinmux/HCI must wait for verified supply setup;
+  do not raise BT_EN based solely on working GENI clocks or assume rails on.
+- NEXT: user temporary-boots wireless2, waits3min, returns recovery and pulls
+  V60 WIRELESS lines. Need passed=2/2 fail0 stopped1 before external UART/HCI.
+  Full Wi-Fi transport/network integration still unimplemented.
+
 # wireless1 diagnostic image built — 2026-10-20
 
 - User explicitly requested an actual image. Built outputs/v60-xnu-wireless1-diag.img

@@ -33,6 +33,7 @@ static void kernel_sleep(unsigned ms){assert(ms==90000);}
 static void kernel_delay(unsigned us){assert(us==1);delays++;}
 static uptr kernel_current_thread(void){return 1;}
 static int kernel_thread_terminate(uptr t){assert(t==1);terminated++;longjmp(finish,1);return 0;}
+#define V60_WIRELESS_PROBE 1
 #include "wireless_probe.h"
 static void run(unsigned halt,int rejected,int failed) {
     votes=0x0c3c0040;blocked=halt;reject=rejected;map_fail=failed;

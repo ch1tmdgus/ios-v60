@@ -21,7 +21,8 @@ python3 v60-pull-touch-log.py --out v60-wireless1-log.txt
 ```
 
 Send the V60 WIRELESS lines or the log. No new flashing command is needed.
-The image itself was built/checked locally but has not been boot-tested yet.
+User later boot-tested this image: all5 branches ready, UART fw203 and FIFO available.
+See [WIRELESS2](WIRELESS2.md) for the next transport test.
 
 ## Hardware changes
 
