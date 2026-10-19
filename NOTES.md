@@ -19,6 +19,10 @@
   No persist/network credentials/MAC file or raw partition dumps. Private ZIP
   must not be uploaded to GitHub. 11 mock tests PASS incl timeout/cleanup,
   symlink/path guards, existing output, size, recovery and slot selection.
+- Source/collector published in commit814410f. GitHub wireless collector CI
+  run39274600971 SUCCESS (11 mocks); touch regression CI39274603786 SUCCESS.
+  Standalone local deliverables: outputs/v60-wireless-collect.py and
+  outputs/V60-WIRELESS.md. Actual recovery collection remains untested.
 - NEXT REQUIRED INPUT: user runs collector from adb-root recovery with
   --include-firmware --mount-vendor-ro --out v60-wireless.zip and supplies ZIP.
   Inspect actual firmware/revision/UART before implementing BT power/HCI and
