@@ -4,8 +4,11 @@ LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
 **iOS 16 / XNU 포팅 프로젝트**입니다. 기존 `ios-sweet` 기반 작업을 V60으로 옮깁니다.
 
 **2026-10-19: V60에서 iOS GUI 부팅과 touch4의 실제 터치 동작이 확인됐습니다.**
-최신 touch5는 버튼 매핑·입력 지연·화면 로그 개선 버전이며, 해당 변경의 실기기
-결과는 아직 대기 중입니다. 검은 배경화면과 설정 → 일반 → 정보 진입 시 멈춤은 미해결입니다.
+최신 touch5에서 **버튼 동작도 사용자 확인**됐습니다. 입력 지연·프레임 개선의
+정량 결과는 아직 없습니다. 검은 배경화면과 설정 → 일반 → 정보 진입 시 멈춤은 미해결입니다.
+
+다음 작업은 [QCA6390 Wi-Fi/Bluetooth 이식](docs/v60/WIRELESS.md)입니다. 현재 무선은
+미구현이며 recovery용 펌웨어 수집 도구를 준비했습니다. 무선 수정 완료 이미지는 없습니다.
 
 ## 다운로드
 
@@ -14,7 +17,7 @@ LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
 | 목적 | 파일 | 확인 상태 |
 | --- | --- | --- |
 | 실제 터치가 동작한 버전 | `v60-xnu-touch4-gui.img` 또는 `v60-touch4-bundle.zip` | 사용자 실기기 성공 보고 |
-| 최신 기본 GUI | `v60-xnu-touch5-gui.img` | 빌드·호스트 검사 통과, 실기기 대기 |
+| 최신 기본 GUI | `v60-xnu-touch5-gui.img` | 버튼 동작 확인, 성능 정량 검증 대기 |
 | 최신 문제 진단, 화면 로그 숨김 | `v60-xnu-touch5-inspect.img` | 설정 정보 멈춤/버튼 진단용 |
 | CPU 부하 비교 | `v60-xnu-touch5-balanced.img` | touch5 입력 개선 + 화면 복사 목표30Hz |
 | 과거 shim/터치 단계 | `v60-shim-test*-bundle.zip`, `v60-touch1..3-bundle.zip` | 아래 기록 참고 |
@@ -32,7 +35,7 @@ Apple IPSW, iOS 루트 이미지, 사용자 파티션/캘리브레이션 덤프�
 | 터치 | **touch4 성공**: SW42902, GPIO 소프트웨어 I²C → 기존 HID 경로 |
 | 터치 통신 | GENI SE13의 FIFO 비활성/GSI-only 확인. GSI DMA 이식 대신 GPIO36/37 사용 |
 | touch5 입력 개선 | 한 손가락 보고서156→48바이트, 추가 접점만 이어 읽기, 폴링10→2ms. 실기기 대기 |
-| 전원·볼륨 버튼 | touch5에서 기존 SPMI observer 드라이버 활성화, V60 볼륨업 매핑 적용. 실기기 대기 |
+| 전원·볼륨 버튼 | touch5에서 기존 SPMI observer 드라이버와 V60 매핑으로 사용자 동작 확인 |
 | 화면 로그 | touch5는 GUI 표시 후 숨김. 영구 로그는 유지하며 panic은 표시 가능 |
 | 프레임/반응 | CPU framebuffer 복사. touch5 기본 목표60Hz, 비교용30Hz. 실제 fps 미측정, GPU 가속 미구현 |
 | 배경화면 | 검은색으로 남는 문제 미해결 |

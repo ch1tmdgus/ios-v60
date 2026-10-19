@@ -1,0 +1,17 @@
+name: V60 wireless collector checks
+on:
+  push:
+    paths: ['tools/v60-wireless-collect.py', 'tools/tests/test_v60_wireless_collect.py', '.github/workflows/v60-wireless-tools.yml']
+  pull_request:
+    paths: ['tools/v60-wireless-collect.py', 'tools/tests/test_v60_wireless_collect.py', '.github/workflows/v60-wireless-tools.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test read-only mount cleanup, path bounds and private collection
+        run: python3 -m unittest discover -s tools/tests -p 'test_v60_wireless_collect.py' -v

@@ -26,7 +26,7 @@
 | touch2 | vendor HWCG 예외 반영. 클럭 통과, SE13 fw303/width32 확인, engine 검사에서 중단 | `0bce09b` |
 | touch3 | FIFO_IF_DISABLE=1, reason2 실기기 확인. GSI-only이므로 GPIO/칩 명령 전 종료 | `0199750` |
 | touch4 | GPIO36/37 소프트웨어 I²C, ID 검증 뒤 보고서/HID 연결. **사용자 터치 성공 보고** | `a55639d` |
-| touch5 | vendor flexible report, poll2ms, PMIC 버튼 매핑, quiet GUI,60/30Hz 프로필. **실기기 미검증** | `62fb34c` |
+| touch5 | vendor flexible report, poll2ms, PMIC 버튼 매핑, quiet GUI,60/30Hz 프로필. **이후 사용자 버튼 동작 확인**, 성능 정량 결과 대기 | `62fb34c` |
 
 각 commit에 `v60-touch1` … `v60-touch5` tag가 연결됩니다. 과거 상태를 살펴보려면:
 
@@ -50,8 +50,8 @@ FIFO_IF_DISABLE=1 tx_width=32 tx_depth=16 rx_width=32 rx_depth=32
 engine blocked reason=2
 ```
 
-실제 터치 성공은 touch4에 대한 사용자 보고입니다. touch5의 버튼 성공·60fps·
-배경화면 수정·정보 화면 수정은 아직 확인하지 않았습니다. 개인 로그/사진은 포함하지 않습니다.
+실제 터치 성공은 touch4에 대한 사용자 보고입니다. 이후 touch5 버튼 동작도 사용자 확인됐습니다. 실제60fps·배경화면 수정·정보 화면
+수정은 아직 확인하지 않았습니다. 개인 로그/사진은 포함하지 않습니다.
 
 ## 공개 소스 통합
 

@@ -11,7 +11,8 @@
   bootloaders, recovery, modem, persist and all backups. Prior upstream-device
   destructive approvals do not apply to the current V60. Require explicit user
   authorization for each destructive device operation. Do not flash just to test.
-- Distinguish user-confirmed touch4 success from touch5 software-only checks.
+- User confirmed touch4 touch and touch5 buttons. Distinguish those reports
+  from unmeasured performance and unimplemented Wi-Fi/Bluetooth.
   Never describe target60Hz as measured60fps or GUI icons as working hardware.
 - The fixed-image builder requires the original baseline SHA; full matching
   XNU build provenance is still unresolved. Preserve the user base port changes.

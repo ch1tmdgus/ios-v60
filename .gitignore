@@ -26,3 +26,7 @@ xnu/.DS_Store
 /v60-touch*-log.txt
 
 /logs/
+
+# Private wireless firmware reference archives
+v60-wireless*.zip
+wireless-reference/

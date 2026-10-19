@@ -1,3 +1,29 @@
+# Wireless next: touch5 buttons confirmed, QCA6390 input collection prepared
+
+- User reports buttons work. Record touch5 button success; do not claim measured
+  performance/fps or a wallpaper/About fix. New requested work is Wi-Fi and BT.
+- User has no bootable Android, only recovery. Need firmware from remaining
+  vendor/modem filesystems; no currently connected device data has been acquired.
+- Provided DT: qcom,cnss-qca6390 Wi-Fi, PCIeRC0/MHI, WLAN_EN20, BT_EN21,
+  SW_CTRL124. BT qca,qca6390 with regulator supplies. HS UART SE6 at998000
+  is active; SE12 a90000 is console. SE6 is candidate BT path, not runtime proof.
+- Read vendor cnss2/pci.c and bluetooth-power.c: QCA6390 selects amss20.bin
+  with optional qca6390/ prefix and revision check. Full PCIe/SMMU/MSI/MHI/QMI/
+  Wi-Fi datapath and GENI UART/BT firmware/HCI/iOS integration remain unported.
+- Inspected baseline nm: no corresponding QCA/IO80211/IOBluetooth family found;
+  not a complete runtime userland/kext inventory. bluetoothd exec is not support.
+  No fake service or wireless-fix image generated. No PMIC/radio/DMA writes.
+- Added tools/v60-wireless-collect.py: selected DT/PCI/tty/build metadata,
+  optional bounded private firmware copies. Recovery-only optional vendor/modem
+  RO mounts (ext4ro,noload;erofs/vfatro), current slot only, /tmp cleanup.
+  No persist/network credentials/MAC file or raw partition dumps. Private ZIP
+  must not be uploaded to GitHub. 11 mock tests PASS incl timeout/cleanup,
+  symlink/path guards, existing output, size, recovery and slot selection.
+- NEXT REQUIRED INPUT: user runs collector from adb-root recovery with
+  --include-firmware --mount-vendor-ro --out v60-wireless.zip and supplies ZIP.
+  Inspect actual firmware/revision/UART before implementing BT power/HCI and
+  separately Wi-Fi PCIe/MHI. No wireless hardware test performed yet.
+
 # Public repository integration — 2026-10-19
 
 - Integrated local bring-up/touch history into existing ch1tmdgus/ios-v60 main
