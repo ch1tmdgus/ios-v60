@@ -1,3 +1,11 @@
+# Repository housekeeping — 2026-10-20
+
+- Added `AGENTS.md` to `.gitignore` (72d6516) and removed the tracked root
+  `AGENTS.md` (a8f96bd) at the user's request. Previous Git history is unchanged.
+- Preserved a local copy at `/workspace/scratch/ios-v60/AGENTS.md` in this session.
+- Documentation-only housekeeping; no builds or device operations performed.
+  The wireless hardware status and next action below are unchanged.
+
 # wireless2 HARDWARE PASS; wireless3 power/HCI image — 2026-10-20
 
 - USER actual wireless2: tx/rx963ca569 and c3695a96 both match, passed2/2 fail0,
