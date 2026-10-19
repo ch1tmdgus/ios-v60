@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the shim and wrap it in a boot.img v2 that mirrors the stock PixelOS header.
+# Build the shim and wrap it in a boot.img v2 that matches the V60 (timelm) BoardConfig header.
 set -euo pipefail
 cd "$(dirname "$0")"
 CC=aarch64-linux-gnu-gcc

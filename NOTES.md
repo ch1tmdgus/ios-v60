@@ -1,3 +1,281 @@
+# Public repository integration — 2026-10-19
+
+- Integrated local bring-up/touch history into existing ch1tmdgus/ios-v60 main
+  based on7130b4c. Preserved existing V60 watchdog/ADT/XNU port changes.
+- README/V60-PORT/xnu README now separate GUI+touch4 hardware success from
+  untested touch5 buttons/performance and unresolved wallpaper/About hang.
+- Added source/history tags, version manifests, documentation, original supplied
+  test1 patch and a host-checks workflow. Removed live.dts only after verifying
+  it was byte-identical Python duplicate of apply-v60-port.py, not a raw DT.
+- Public distribution: source/docs in Git; generated experimental images and
+  version bundles in prerelease v60-bringup-20261019 with SHA256SUMS. Raw dumps,
+  personal logs, Apple userland and private calibration/identity data excluded.
+- NEXT device work: touch5-inspect hardware test and full log, as detailed below.
+
+# V60 local handoff — 2026-10-19
+
+## touch5: touch4 HARDWARE WORKS; buttons, flexible reports, quiet GUI
+
+- User reports touch4 actual touch works. New requests: power/volume buttons,
+  stutter/slow response, hide screen logs, black wallpaper, Settings/About hangs.
+  Clarification: tapping About hangs/no response, not confirmed app crash.
+- Source-verified flexible reports in vendor sw42902_irq_read_data: first48
+  bytes (12hdr+24pen+12finger), extra at600+48/4=60c for additional contacts.
+  New planner and variable-length decoder retain bounds; GPIO bit timing5us
+  unchanged. Poll sleep10->2ms. First3 reads log byte count/counter-based bus_us.
+- Button source: named pinctrl pm8150 SID0 GPIO6 (gpio_keys pinctrl-0=660
+  resolves key_vol_up_default phandle660, pinsgpio6); PON SID0 bit0/1 power/down.
+  Note supplied gpio_keys gpios cell66a does NOT match pm8150 controller661;
+  named state identifies intended pin but dump phandle inconsistency remains.
+  Existing read-only SPMI driver patched APID target4c1->0c5 via exact two
+  instructions at74e89ec/f0; low-byte register offsets unchanged. Updated3
+  label strings. Enabled sweetkeys=1; still requires GPIO input/enabled checks.
+  No PMIC config/reset writes; hardware buttons UNTESTED.
+- Keep GUI console-muted and persistent log; remove spam arg, GUI tracing/sampler
+  disabled. Target copy cap60Hz, balanced30Hz fallback. Inspected actual present
+  and memcpy; CPU copy + rearm16.667ms remains, NO measured60fps or GPU claim.
+- inspect is also quiet but sweetiolog=Preferences and sampler Preferences,
+  SpringBoard,backboardd first90sec then120sec. Have user reproduce About hang
+  and retain it2min before recovery pull. Updated collector also prints keys
+  and Preferences sampler lines; need full file for root/UI causes.
+- Black wallpaper/About NOT fixed and no cause proven. Prior Redmi URL capacity
+  crash is not evidence of current About hang. No matching userland/root files
+  available; adb inventory0 devices. No root edits/mounts or flashing performed.
+- Local checks PASS: ASan/UBSan decoder15+flex9+clock11+engine11; wired-AND
+  bus model includes48+12-byte split and60c address; QEMU printf ABI; wrong
+  baseline refusal. Module6206/9064 bytes, guarded compile/patch checks passed.
+- NEXT: hardware touch5-inspect test buttons/scroll, About2min then full log;
+  compare balanced if60Hz costs CPU. Resolve About blocked call/wallpaper assets
+  using actual samples/log, and verify PMIC mapping/permissions from key logs.
+
+
+## touch4: GSI-only confirmed, GPIO software-I2C alternative implemented
+
+- Actual user touch3 log flush14: FIFO_IF_DISABLE=1, TXwidth32/depth16,
+  RXwidth32/depth32, reason2. All branches ready1; GENI status0. No touch
+  chip commands executed in touch3. GSI-only is now observation, not guess.
+- Inspected vendor drivers/dma/qcom/gpi.c (DMA rings/coherent allocation and
+  mapping), msm_gpi.h, i2c-algo-bit.c, pinctrl-kona.c and kona-pinctrl.dtsi.
+  Full GSI/DMA/IOMMU port not implemented. Chose GPIO software-I2C as alternate
+  transport; do NOT describe touch4 as GSI implementation or hardware fix proven.
+- gpio_i2c.h implements 0x28 single-master open-drain START/write/ACK/repeated
+  START/read/final NACK/STOP with bounded SCL polling; loss/timeout releases
+  bus, no forced recovery. Production gpio callback only pulls LOW or releases
+  using OE9 with OUT1 latch0. SDA36/SCL37 assignment remains hardware test.
+- Takeover requires GENI master/slave idle and GPIO mux/OE readback; no GENI
+  register or DMA writes. Restores original two bus configs/output latches on
+  worker exit. Keeps prior GCC clock-ready policy to read GENI state.
+- Power-on now follows vendor order: VCL67 high,1ms,VDD68 high,10ms,reset38high,
+  100ms. Never reset-low, PMIC/RPMh or firmware writes. ID10/proto4 guard before
+  touch config/HID. Logs power, line states, rc/phase, first3 raw report headers,
+  periodic polls/reads/frames/IRQ. Probe mode reads only chip ID/product after
+  SoC power/pin setup, then restores bus. Touch remains UNTESTED on hardware.
+- Host independent wired-AND edge slave checks address/data/MSB order, combined
+  4-byte read,156-byte report,6-byte write, four NACK phases, stuck SDA/SCL,
+  midtransfer timeout/arbitration/stretch/bounds; ASan/UBSan. Also retains
+  packet15/clock11/old-engine11 and QEMU Apple-varargs checks.
+- Local checks PASS: edge-model (including STOP timeout after NACK),
+  ASan/UBSan, decoder15/clock11/engine11, QEMU printf ABI. Guarded module
+  build5993/9064 bytes, no globals/unresolved imports, bounded edits.
+- NEXT: user boots touch4-diag, waits60+s, tests taps/swipe, collects full V60
+  TOUCH lines. Check SDA/SCL idle values, power readback and first probe rc/phase.
+  If ACK/ID works inspect report headers/contacts, otherwise diagnose actual
+  GPIO ownership/pullups/power/timing. No speculative DMA or FIFO-disable writes.
+
+
+## touch3: isolate FIFO-disabled / GSI-only blocker after touch2 log
+
+- User device touch2 flush14: all five branches ready1. SE13 fw303 status0,
+  TX20102864 RX20204800; old generic engine condition stopped before GPIO/chip.
+- Compared exact vendor include/linux/qcom-geni-se.h and platform/msm helper:
+  protocol3 I2C; TX width32 depth16; RX width32 depth32. Those pass old checks.
+  Unlogged IF_FIFO_DISABLE bit0 most likely explains stop; transient STATUS
+  reread is also possible. Do NOT claim IF value observed until touch3 result.
+- Vendor i2c-qcom-geni runtime_resume selects GSI_ONLY when IF disable set.
+  DT SE13 a94000 DMA phandles are gpi_dma1 TX/RX channel index5 protocol3.
+- touch3 saves capability/status snapshot once, prints IF and decoded fields,
+  distinguishes protocol/GSI/width/depth/busy. Retains stop for GSI before
+  engine writes, GPIO power or touch-chip commands. No transport fix claimed.
+- Added engine_policy.h + 11 host checks for observed values / alternate failure
+  cases. Build still guarded against original boot2-gui hash, preserves layout.
+- Local validation: 15 decoder + 11 clock + 11 engine checks under ASan/UBSan,
+  QEMU printf ABI test and guarded build passed; module5621/9064 bytes.
+  Builder verified exact bounded payload edits and unchanged shim/DTB.
+- NEXT: collect touch3 FIFO_IF_DISABLE and reason. If GSI-only confirmed,
+  implement actual wrapper1 SE5 GPI/GSI plus DMA/IOMMU path from vendor sources.
+  No blanket FIFO bypass, no writes to IF_FIFO_DISABLE_RO. Device touch remains
+  unavailable. Hardware touch3 result pending.
+
+
+## touch2: fix HWCG halt-policy mismatch found in touch1 device log
+
+- User successfully pulled persistent ring, flush=43. V60 TOUCH lines:
+  driver delay60 mode1; GPIO38/39/67/68 all0 (read BEFORE power setup);
+  GCC vote=0x0c3c0040 cfg=0x100000 dfs=0x21;
+  clock halted off=0x18008 value=0x80000002; worker stopped.
+- Exact first blocker: touch1 clocks() required CLK_OFF clear on every
+  branch. Rofik gcc-kona wrap1 S_AHB declares hwcg_reg=0x18008 bit1, and
+  clk-branch.c clk_branch_wait skips halt polling while HWCG enabled.
+  Thus observed value satisfies vendor HWCG exception. It does not prove
+  that subsequent GENI/controller initialization will succeed.
+- Added clock_policy.h, scoped exception only to0x18008 when bit1 set;
+  other branches still checked. Added clock-vote readback guard and per-
+  branch off/value/hwcg/ready logs. No forced HWCG disable or blanket skip.
+- Builder now outputs touch2 GUI/diag/probe from SAME original boot2 input;
+  old touch1 deliverables remain preserved. Module size5372 of9064 bytes.
+- Tests: packet decoder15, clock policy11 (including actual observed value
+  and negative cases), ASan/UBSan, QEMU varargs bridge pass. Hardware touch2
+  pending. NEXT: user boots touch2-diag and collects V60 TOUCH lines beyond
+  old clock failure; inspect first subsequent blocker before changes.
+
+
+## touch1 follow-up: no touch; photo has no driver result
+
+- User tested touch1 diag: touch still unavailable. Attached photo shows
+  a partial clock/UI and generic exec logs (xpcproxy, bluetoothd, fairplayd.H2,
+  remotemanagementd); no V60 TOUCH initialization/status line is visible.
+- Do not infer bus/power/firmware/HID failure, or driver success, from those
+  generic process logs. Need complete persistent console / early worker log.
+- Host adb inventory: zero devices. XNU boot args preserve sweetusb=0, so
+  no adb access while XNU runs is expected. Did not issue device commands.
+- Exposed existing read-only collector as outputs/v60-pull-touch-log.py and
+  instructions V60-TOUCH-LOG.md. It needs existing adb-root V60 recovery;
+  otherwise capture diag from boot including worker's ~60s startup interval.
+- No touch2 image or speculative hardware changes made in this follow-up.
+  NEXT: obtain log and locate first V60 TOUCH failure, or absence of init line.
+
+
+## Latest V60: user supplied GUI-booting XNU; SW42902 touch1 experiment
+
+- User reports v60-xnu-boot2-gui.img boots to a black lock-style screen with
+  clock, battery, home bar and camera button, but no touch. This supersedes
+  old statements that no V60 XNU boot was observed. It is a user report,
+  not an independently captured full home-screen result.
+- User has only gui/diag images, no matching build source. Binary contains
+  Darwin 22.6.0 xnu-8796.141.3, CI path ios-v60/dxb/xnu. Public repository
+  lookup failed; full matching source/build tree not recovered.
+- Exact baseline SHA256: 6c916223cf86aca1caf13d4e490a20c519dfc7f315671bb494e643a2d31ab816.
+  Payload has sweettouch=0, sweetkeys=0, sweetusb=0, cpus=4. Included touch
+  implementation is the old Goodix/Focaltech module, not a V60 driver.
+- Live DT proves active SW42902 @0x28 on GENI13 0xa94000, disabled SW42000.
+  GPIO38 reset/39 IRQ (TLMM SOUTH 0xf500000), GPIO67 VCL/68 VDD (NORTH
+  0xf900000), SDA36/SCL37. Compared Rofik 7eab1a7 touch/GCC/pinctrl sources.
+- Added self-contained v60-touch/ replacement source, exact-image guarded
+  builder and host/QEMU tests. Compiled module replaces only old disabled
+  touch code at 0xfffffe00074e9168 within original 0x2368-byte module space;
+  imports resolved using recovered symbols. No kernel-wide rebuild claimed.
+- Also inspected HID start() using height2460 but touch() retaining2399
+  clamp and2351 edge; builder validates and replaces 3 exact instructions
+  to2459/2411. Driver respects existing 2436 logical crop.
+- Driver waits60s, checks GENI firmware/packing/idle state, enables documented
+  clock/GPIO pins, confirms chip10/protocol4 before volatile control writes,
+  polls reports and calls existing HID. No firmware/erase, PMIC/RPMh or
+  reset-low writes. Probe mode only reads controller ID after SoC setup.
+- Software checks: 15 packet tests ASan/UBSan; Apple printf varargs bridge
+  FP/LR/stack test in QEMU and compared Apple-target clang; build succeeds;
+  patch-size/BSS/import/image-ID/bounded-byte-diff checks. Real V60 touch
+  response remains UNTESTED. No device flashing or root-file edits performed.
+- Deliverables: touch1-gui, touch1-diag, touch1-probe images + manifest and
+  complete replacement source; see v60-touch/README.md. NEXT: user GUI boot,
+  wait for driver, test taps/swipe; if failure obtain V60 TOUCH log lines.
+
+
+## Latest V60: test2b register reads complete; test2c write isolation
+
+- IMG_2145.HEIC: RESULT GIC register reads complete + END observed.
+  SRE=1, GICD CTLR=0x10, TYPER=0x007b041d, IIDR=0x0201143b;
+  boot GICR=0x17a60000, TYPER=0x21, WAKER/CTLR=0;
+  PPI group/enable/active=0, pending=0x08840000.
+  Reading registers after MMU activation completed; IRQ delivery is untested.
+- No device result for MMU-only 120s control. Do not claim long-term stability.
+- New gic-write mode (V60_DIAG=5), v60-shim-test2c.img: activate MMU,
+  keep IRQ masked, visible 2s breadcrumb before each configuration write,
+  DSB/ISB and readback afterward. First write matches original GICD CTLR
+  old|0x13, RWP bounded to 1s. Requires already-awake redistributor (as in
+  photo); no WAKER changes. Only ID1/27/30 group/priority/enable updates,
+  then ICC_CTLR/PMR/BPR1/IGRPEN1 separately. No timers enabled or SGIs sent.
+- Final write-sequence-complete is not proof of effective configuration;
+  inspect all readbacks. Nor does it establish the old reset's cause:
+  this diagnostic changes only three priorities instead of all 32.
+- Build/ABS64/unpack/Image-size/image-ID/DTB/ramdisk checks pass. Disassembly
+  contains no DAIF IRQ unmask, timer enables or SGI sends in shipping mode.
+- QEMU-adapted copy reached final write-sequence-complete with DAIF=0x3c0.
+  Only the emulator copy wakes its GICR first to model V60 WAKER=0; this
+  wake code is not in the shipping source/image. GIC addresses/PSCI also
+  adapted only in QEMU copy. Hardware test2c results pending.
+- See V60-TEST2C.md. NEXT: collect final screen or last STEP/panic before
+  reset; then decide whether/how to attempt isolated IRQ delivery.
+
+
+## Latest V60: test2 reset after MMU; test2b isolation
+
+- User reports PAGE 2 -> black screen briefly -> device reboot. No IRQ
+  result, panic text, or exact failure instruction observed. This supersedes
+  the pending-PAGE-3 request below. Hardware MMU activation was observed,
+  but prolonged stability and IRQ delivery remain unverified.
+- Previous CPU mode mutates GIC and unmasks IRQ in one burst. Do not infer
+  a particular GIC fault/watchdog cause from the reboot alone.
+- New build modes: gic-read (V60_DIAG=3, v60-shim-test2b.img) and mmu-hold
+  (V60_DIAG=4, v60-shim-test2b-mmu.img). Both activate 16K MMU with IRQ
+  masked. gic-read adds a barrier + 2s breadcrumb before each read group;
+  scans GICR with per-frame breadcrumbs, never writes GIC/ICC or unmasks
+  IRQ. mmu-hold never accesses GIC, reports ALIVE every 5s for 120s.
+- No UFS/payload/CPU_ON/device commands in these new diagnostic paths.
+- Local checks: GCC builds, no C ABS64, preserved DTB/ramdisk and valid
+  image ID/size, reproducible gic-read build. Disassembly has no DAIF IRQ
+  unmask or ICC configuration writes in new modes. QEMU platform-adapted
+  copy reached GIC reads complete and MMU hold 120s complete.
+- test2b device read-completion photo has now been received (see latest
+  test2c section). Preserve old artifacts for reproducibility.
+
+
+## V60 test2 device results received (IMG_2141 / IMG_2142)
+
+- IMG_2141: PAGE 1, CurrentEL=4 (EL1), CNTFRQ=0x124f800
+  (19,200,000 Hz), PSCI=0x10001, SMCCC=0x10001,
+  PSCI_FEATURES(CPU_ON)=0. This advertises CPU_ON support; not an SMP test.
+- IMG_2142: PAGE 2, 16KB MMU rc=0, n_l3=1;
+  SCTLR before=0xc00808, after=0xc0180d (M/C/I enabled).
+  PAR IMG / FB / GIC all show bit0=0 (successful translation).
+- Follow-up: user reports black screen and reboot after PAGE 2. No PAGE 3
+  IRQ result observed; do not mark hardware timer/GIC tests PASS. Use test2b.
+
+
+This section concerns the current LG V60, not the upstream sweet device below.
+Current user authorization covers analysis, code changes and test image creation;
+prior sweet-device destructive approvals below do not apply to this V60.
+
+- Baseline upstream: fdad0de8dc0e75c5ea84762adc03f7232dc91f19.
+- User supplied v60-shim-test1.patch and .img, dt.tar, v60.zip.
+  Private inputs remain outside git in the parent workspace work/ directory.
+- Applied test1 patch. User photo IMG_2139.HEIC confirms framebuffer + UFS
+  TUR/CAP/READ rc=0, 4096-byte LUN0 blocks, valid GPT, userdata at LBA
+  0x005e2e28 (sda28). No XNU payload in test1 (expected).
+- V60 dt.tar and Rofik kona.dtsi agree on GICD/GICR, timer INTIDs 27/30,
+  UFS host and 19.2 MHz counter. v60.zip/live.dts is malformed (Finder
+  metadata), dmesg.txt empty. Do not use its live.dts for hardware facts.
+- Added tools/build-v60-diag.py, --mode cpu or smp, reusing test1 boot-v2
+  settings, identical DTB and empty ramdisk; recomputes image ID.
+- CPU diagnostic bypasses loader/UFS, displays CPU features/PSCI, then 16K
+  MMU, then both timer IRQs and 10 self SGIs. Pages 1/2 last 15 seconds;
+  final result/panic stays on screen. SMP is a separate MMU-off image,
+  skips boot CPU, logs MIDR/MPIDR and requests CPU_OFF.
+- Fixed panic X30 saved-register index (31, not 29), uses actual CNTFRQ
+  for time conversion. Existing loader paths remain available outside diagnostics.
+- Built both using aarch64-elf GCC 16.2.0 / binutils 2.47 on arm64 macOS.
+  No C ABS64 relocations; unpack/DTB/ramdisk/header checks pass.
+- QEMU CPU smoke: temporary source copy changes ONLY GICD/GICR to virt's
+  0x08000000/0x080a0000 and PSCI instruction SMC->HVC. 2GB RAM, Cortex-A76,
+  GICv3. Reached PASS: VTIMER=25, PTIMER=25, SGI=10, other=0.
+  This validates control flow/MMU/IRQ logic, not V60 hardware. QEMU copy
+  and its framebuffer capture are private scratch, not shipping images.
+- V60 test2 reached CPU/MMU pages then rebooted (see latest test2b section).
+  No flashing, partition writes, kernel CI or push.
+- NEXT: test2b read-only GIC and MMU stability control. XNU stage remains
+  pending; do not reuse sweet highmem or peripheral addresses blindly.
+
+---
+
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
 ## Agent handoff / active work (2026-10-15, latest)

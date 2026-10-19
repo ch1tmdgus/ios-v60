@@ -31,8 +31,8 @@
 #define GICR_ISPENDR0		(GICR_SGI + 0x200)
 #define GICR_ISACTIVER0		(GICR_SGI + 0x300)
 #define GICR_ICFGR1		(GICR_SGI + 0xc04)
-#define VTIMER_INTID		27	/* DT: <GIC_PPI 3 ...>, not the usual 27 */
-#define PTIMER_INTID		30	/* DT: <GIC_PPI 2 ...> */
+#define VTIMER_INTID		27	/* V60 DT: GIC_PPI 11 */
+#define PTIMER_INTID		30	/* V60 DT: GIC_PPI 14 */
 #define SGI_INTID		1
 
 #define PSCI_VERSION		0x84000000UL
@@ -61,6 +61,7 @@ extern char secondary_entry[];
 
 static const char *stage;	/* set at runtime: no absolute pointers in data */
 static volatile uint64_t sec_mpidr[NR_CPUS];
+static volatile uint64_t sec_midr[NR_CPUS];
 static volatile uint64_t sec_probe[4];	/* CPU1 redistributor write test */
 static volatile uint32_t irq_count, irq_other, irq_last;
 static volatile int irq_src;
@@ -158,8 +159,13 @@ void exc_handler(uint64_t slot, uint64_t *regs)
 	con_hex("SPSR", rsr("spsr_el1"));
 	con_hex("X0", regs[0]);
 	con_hex("X1", regs[1]);
-	con_hex("X30", regs[29]);	/* stashed lr is just above the frame */
+	con_hex("X30", regs[31]);	/* saved x29/x30 follow the 30-word frame */
+#ifdef V60_DIAG
+	con_str("PANIC", "halted; photograph this screen");
+	for (;;) __asm__ volatile("wfe");
+#else
 	reset(40);
+#endif
 }
 
 /* ---- SMP ---- */
@@ -168,8 +174,10 @@ static uintptr_t find_gicr(void);
 
 void secondary_main(uint64_t idx)
 {
+	sec_midr[idx] = rsr("midr_el1");
 	sec_mpidr[idx] = rsr("mpidr_el1") | (1ULL << 63);
 	if (idx == 1) {
+#ifndef V60_DIAG
 		uintptr_t r = find_gicr();
 		if (r) {
 			sec_probe[0] = rd32(r + GICR_IGROUPR0);
@@ -179,6 +187,7 @@ void secondary_main(uint64_t idx)
 			sec_probe[2] = rd32(r + GICR_IPRIORITYR + 16);
 		}
 		sec_probe[3] = r ? 1 : 0xdead;
+#endif
 	}
 	__asm__ volatile("dsb sy" ::: "memory");
 	smc(PSCI_CPU_OFF, 0, 0, 0);
@@ -279,7 +288,7 @@ static void irq_window(const char *label, uintptr_t r, int src)
 	con_hex2(" pre", "tctl=", ist, "last=", irq_last);
 }
 
-static void test_gic(void)
+static int test_gic(void)
 {
 	stage = "gic sre";
 	uint64_t sre = rsr("icc_sre_el1");
@@ -289,7 +298,7 @@ static void test_gic(void)
 	}
 	if (!(rsr("icc_sre_el1") & 1)) {
 		con_str("GIC", "no sysreg iface, skip");
-		return;
+		return 0;
 	}
 
 	stage = "gic dist";
@@ -303,7 +312,7 @@ static void test_gic(void)
 	uintptr_t r = find_gicr();
 	if (!r) {
 		con_str("GICR", "not found");
-		return;
+		return 0;
 	}
 	uint32_t waker = rd32(r + GICR_WAKER);
 	if (waker & 2) {
@@ -335,10 +344,16 @@ static void test_gic(void)
 
 	stage = "gic vtimer";
 	irq_window("VTIMER", r, VTIMER_INTID);
+	uint32_t virtual_irqs = irq_count;
+	stage = "gic ptimer";
+	irq_window("PTIMER", r, PTIMER_INTID);
+	uint32_t physical_irqs = irq_count;
 	stage = "gic sgi";
 	irq_window("SGI1", r, SGI_INTID);
+	uint32_t sgi_irqs = irq_count;
 	wr32(r + GICR_ICENABLER0, 0xffffffff);
 	isb();
+	return virtual_irqs > 0 && physical_irqs > 0 && sgi_irqs == 10;
 }
 
 /* ---- main ---- */
@@ -368,21 +383,294 @@ static uint64_t ticks_mem(void)
 
 static uint32_t to_us(uint64_t ticks)
 {
-	return ticks * 10 / 192;	/* 19.2 MHz */
+	return ticks * 1000000 / rsr("cntfrq_el0");
 }
+
+#ifdef V60_DIAG
+static void __attribute__((noreturn)) diag_halt(void)
+{
+	con_str("END", "halted; photograph this screen");
+	for (;;) __asm__ volatile("wfe");
+}
+
+/* test2b: keep IRQ masked; isolate MMU stability from GIC register access. */
+static void __attribute__((unused)) diag_step(const char *name)
+{
+	stage = name;
+	con_str("STEP", name);
+	/* Make the breadcrumb visible before attempting the next operation. */
+	__asm__ volatile("dsb sy" ::: "memory");
+	delay_ms(2000);
+}
+
+static void __attribute__((unused, noreturn)) v60_read_diag(void)
+{
+	con_clear(RED);
+#if V60_DIAG == 4
+	con_str("V60", "test2b MMU hold / IRQ masked");
+#else
+	con_str("V60", "test2b GIC reads / IRQ masked");
+#endif
+	con_hex("EL", rsr("CurrentEL"));
+	con_hex("SCTLR0", rsr("sctlr_el1"));
+	if ((((rsr("id_aa64mmfr0_el1") >> 20) & 15) == 15) ||
+	    (rsr("sctlr_el1") & 5)) {
+		con_str("STOP", "16K absent or MMU/cache already on");
+		diag_halt();
+	}
+	struct mmu_info mi = {0};
+	diag_step("enable 16K MMU");
+	int rc = mmu_enable(&mi);
+	con_hex2("MMU", "rc=", rc, "l3=", mi.n_l3);
+	con_hex("SCTLR1", rsr("sctlr_el1"));
+	if (rc) diag_halt();
+#if V60_DIAG == 4
+	con_str("INFO", "no GIC access; alive every 5 s");
+	stage = "mmu hold";
+	for (unsigned seconds = 0; seconds <= 120; seconds += 5) {
+		con_hex2("ALIVE", "seconds=", seconds, 0, 0);
+		__asm__ volatile("dsb sy" ::: "memory");
+		if (seconds < 120) delay_ms(5000);
+	}
+	con_str("RESULT", "MMU hold 120 s complete");
+#else
+	diag_step("read ICC_SRE_EL1");
+	con_hex("SRE", rsr("icc_sre_el1"));
+	diag_step("read GICD_CTLR / TYPER / IIDR");
+	con_hex2("GICD", "ctlr=", rd32(GICD_BASE), "typer=", rd32(GICD_BASE + 4));
+	con_hex2("GICD", "iidr=", rd32(GICD_BASE + 8), 0, 0);
+	uint64_t aff = rsr("mpidr_el1");
+	uint32_t want = (aff & 0xffffff) | ((aff >> 8) & 0xff000000);
+	uintptr_t r = 0;
+	for (uintptr_t off = 0; off < GICR_SIZE; off += GICR_PE_SIZE) {
+		stage = "read GICR_TYPER";
+		/* One breadcrumb per redistributor, kept on the same screen. */
+		con_hex2("READ R", "base=", GICR_BASE + off, 0, 0);
+		__asm__ volatile("dsb sy" ::: "memory");
+		delay_ms(1000);
+		uint64_t typer = rd64(GICR_BASE + off + GICR_TYPER);
+		con_hex("TYPER", typer);
+		if ((uint32_t)(typer >> 32) == want) {
+			r = GICR_BASE + off;
+			break;
+		}
+		if (typer & (1 << 4)) break;
+	}
+	if (!r) {
+		con_str("STOP", "boot CPU redistributor not found");
+		diag_halt();
+	}
+	diag_step("read GICR_WAKER / CTLR");
+	con_hex2("GICR", "waker=", rd32(r + GICR_WAKER), "ctlr=", rd32(r));
+	diag_step("read PPI group / enable / pending");
+	con_hex2("PPI", "group=", rd32(r + GICR_IGROUPR0), "enable=", rd32(r + GICR_ISENABLER0));
+	con_hex2("PPI", "pending=", rd32(r + GICR_ISPENDR0), "active=", rd32(r + GICR_ISACTIVER0));
+	con_str("RESULT", "GIC register reads complete");
+	con_str("INFO", "no GIC writes / no IRQ delivery test");
+#endif
+	diag_halt();
+}
+
+/* test2c: separate configuration writes from IRQ delivery. */
+static void __attribute__((unused)) diag_priority(uintptr_t r, unsigned id,
+    const char *name)
+{
+	diag_step(name);
+	wr8(r + GICR_IPRIORITYR + id, 0xa0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("PRIOR", "id=", id, "read=", rd32(r + GICR_IPRIORITYR + (id & ~3U)));
+}
+
+static void __attribute__((unused, noreturn)) v60_write_diag(void)
+{
+	con_clear(RED);
+	con_str("V60", "test2c GIC writes / IRQ masked");
+	con_str("INFO", "readback after every write");
+	con_hex("DAIF", rsr("daif"));
+	if ((((rsr("id_aa64mmfr0_el1") >> 20) & 15) == 15) ||
+	    (rsr("sctlr_el1") & 5)) {
+		con_str("STOP", "16K absent or MMU/cache already on");
+		diag_halt();
+	}
+	struct mmu_info mi = {0};
+	diag_step("enable 16K MMU");
+	int rc = mmu_enable(&mi);
+	con_hex2("MMU", "rc=", rc, "sctlr=", rsr("sctlr_el1"));
+	if (rc) diag_halt();
+	if (!(rsr("icc_sre_el1") & 1)) {
+		con_str("STOP", "SRE not enabled");
+		diag_halt();
+	}
+	/* First write of the original failing test, now with a visible barrier. */
+	diag_step("write GICD_CTLR | 0x13");
+	uint32_t old = rd32(GICD_BASE);
+	wr32(GICD_BASE, old | 0x13);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	uint64_t end = now() + rsr("cntfrq_el0");
+	while ((rd32(GICD_BASE) & (1U << 31)) && now() < end) ;
+	uint32_t ctlr = rd32(GICD_BASE);
+	con_hex2("GICD", "was=", old, "read=", ctlr);
+	if (ctlr & (1U << 31)) {
+		con_str("STOP", "GICD RWP timeout");
+		diag_halt();
+	}
+	stage = "find boot GICR";
+	uintptr_t r = find_gicr();
+	if (!r) {
+		con_str("STOP", "boot GICR not found");
+		diag_halt();
+	}
+	con_hex("GICR", r);
+	uint32_t waker = rd32(r + GICR_WAKER);
+	con_hex2("WAKER", "read=", waker, 0, 0);
+	if (waker & 6) {
+		/* test2b showed zero; avoid adding a different wakeup path here. */
+		con_str("STOP", "GICR not awake; send this screen");
+		diag_halt();
+	}
+	uint32_t mask = (1U << VTIMER_INTID) | (1U << PTIMER_INTID) | (1U << SGI_INTID);
+	diag_step("write IGROUPR0 (test IDs only)");
+	old = rd32(r + GICR_IGROUPR0);
+	wr32(r + GICR_IGROUPR0, old | mask);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("GROUP", "was=", old, "read=", rd32(r + GICR_IGROUPR0));
+	diag_priority(r, SGI_INTID, "write priority SGI1");
+	diag_priority(r, VTIMER_INTID, "write priority VTIMER");
+	diag_priority(r, PTIMER_INTID, "write priority PTIMER");
+	diag_step("write ISENABLER0 (test IDs only)");
+	wr32(r + GICR_ISENABLER0, mask);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("ENABLE", "want=", mask, "read=", rd32(r + GICR_ISENABLER0));
+	diag_step("write ICC_CTLR_EL1 EOImode 0");
+	uint64_t c = rsr("icc_ctlr_el1");
+	wsr("icc_ctlr_el1", c & ~2ULL);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex2("ICC CTRL", "was=", c, "read=", rsr("icc_ctlr_el1"));
+	diag_step("write ICC_PMR_EL1 = 0xf0");
+	wsr("icc_pmr_el1", 0xf0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("PMR", rsr("icc_pmr_el1"));
+	diag_step("write ICC_BPR1_EL1 = 0");
+	wsr("icc_bpr1_el1", 0);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("BPR1", rsr("icc_bpr1_el1"));
+	diag_step("write ICC_IGRPEN1_EL1 = 1");
+	wsr("icc_igrpen1_el1", 1);
+	__asm__ volatile("dsb sy; isb" ::: "memory");
+	con_hex("GRPEN1", rsr("icc_igrpen1_el1"));
+	con_hex("DAIF", rsr("daif"));
+	con_str("RESULT", "write sequence complete / IRQ masked");
+	con_str("INFO", "readbacks need review; IRQ untested");
+	diag_halt();
+}
+
+static void __attribute__((noreturn)) v60_diag(uint64_t dtb)
+{
+#if V60_DIAG == 5
+	(void)dtb;
+	v60_write_diag();
+#endif
+#if V60_DIAG == 3 || V60_DIAG == 4
+	(void)dtb;
+	v60_read_diag();
+#endif
+	stage = "v60 cpu registers";
+	con_clear(RED);
+#if V60_DIAG == 2
+	con_str("V60", "test2 SMP (MMU off)");
+#else
+	con_str("V60", "test2 CPU / MMU / IRQ");
+#endif
+	con_str("PAGE", "1: registers (15 seconds)");
+	con_hex("DTB", dtb);
+	con_hex("EL", rsr("CurrentEL"));
+	con_hex("MPIDR", rsr("mpidr_el1"));
+	con_hex("MIDR", rsr("midr_el1"));
+	con_hex("MMFR0", rsr("id_aa64mmfr0_el1"));
+	con_hex("PFR0", rsr("id_aa64pfr0_el1"));
+	con_hex("CNTFRQ", rsr("cntfrq_el0"));
+	con_hex("SCTLR", rsr("sctlr_el1"));
+	con_hex2("PSCI", "ver=", smc(PSCI_VERSION, 0, 0, 0),
+		"smccc=", smc(SMCCC_VERSION, 0, 0, 0));
+	psci_line("CPU_ON", PSCI_CPU_ON);
+	con_str("INFO", "no storage access / no payload");
+	delay_ms(15000);
+#if V60_DIAG == 2
+	con_clear(RED);
+	con_str("V60", "test2 SMP / CPU_ON + CPU_OFF");
+	con_str("INFO", "CPU0..7 MPIDR = index << 8");
+	stage = "v60 smp";
+	uint64_t self = rsr("mpidr_el1") & 0xffffff;
+	/* MMU/caches remain off for shared reports. No secondary GIC writes. */
+	for (unsigned i = 0; i < NR_CPUS; i++) {
+		char label[] = "CPU0";
+		label[3] = '0' + i;
+		if (((uint64_t)i << 8) == self) {
+			con_str(label, "boot CPU: skipped");
+			continue;
+		}
+		con_str(label, "calling CPU_ON");
+		int64_t rc = smc(PSCI_CPU_ON, (uint64_t)i << 8,
+			(uintptr_t)secondary_entry, i);
+		uint64_t end = now() + rsr("cntfrq_el0") / 2;
+		while (!sec_mpidr[i] && now() < end) ;
+		con_hex2(label, "ret=", (uint32_t)rc, "midr=", sec_midr[i]);
+		con_hex("MPIDR", sec_mpidr[i]);
+	}
+	diag_halt();
+#else
+	con_clear(RED);
+	con_str("V60", "test2 MMU (16K granule)");
+	con_str("PAGE", "2: MMU (15 seconds)");
+	uint64_t tg16 = (rsr("id_aa64mmfr0_el1") >> 20) & 15;
+	if (tg16 == 15 || (rsr("sctlr_el1") & 5)) {
+		con_str("STOP", "16K absent or MMU/cache already on");
+		diag_halt();
+	}
+	struct mmu_info mi = {0};
+	stage = "v60 mmu enable";
+	int rc = mmu_enable(&mi);
+	con_hex2("MMU", "rc=", rc, "l3=", mi.n_l3);
+	con_hex("IMG LO", mi.img_lo);
+	con_hex("IMG HI", mi.img_hi);
+	con_hex("TTBR0", mi.ttbr);
+	con_hex("SCTLR0", mi.sctlr_before);
+	con_hex("SCTLR1", mi.sctlr_after);
+	con_hex("TCR", rsr("tcr_el1"));
+	con_hex("PAR IMG", mmu_probe((uintptr_t)v60_diag));
+	con_hex("PAR FB", mmu_probe(FB_BASE));
+	con_hex("PAR GIC", mmu_probe(GICD_BASE));
+	if (rc) diag_halt();
+	delay_ms(15000);
+	con_clear(RED);
+	con_str("V60", "test2 GICv3 / timers");
+	con_str("PAGE", "3: IRQ results (stays on screen)");
+	con_hex2("INTID", "virt=", VTIMER_INTID, "phys=", PTIMER_INTID);
+	int ok = test_gic();
+	con_str("RESULT", ok ? "PASS: both timers + 10 SGIs" : "CHECK IRQ counters / panic");
+	stage = "v60 diag done";
+	diag_halt();
+#endif
+}
+#endif
 
 void shim_main(uint64_t dtb)
 {
+#ifdef V60_DIAG
+	v60_diag(dtb);
+#endif
 	struct mmu_info mi;
 
-	/* V60: disable the apps watchdog first, as Linux does on suspend. Verified on device (survives 180 s). */
+	/* Preserve the V60 base port watchdog handling on the payload path.
+	 * V60_DIAG above retains the isolated diagnostic sequence.
+	 */
 	wr32(WDT_BASE + 0x08, 0);
 	__asm__ volatile("dsb sy" ::: "memory");
 
 	/* An xnu payload in the ramdisk means: boot it (MMU stays off). */
 	stage = "loader";
 	con_clear(RED);
-	con_str("SHIM", "sweet milestone 4: xnu loader");
+	con_str("SHIM", "V60 test: fb + ufs probe");
 	con_skip();
 	const char *why = loader_boot(dtb);
 	con_str("LOADER", why);

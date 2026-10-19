@@ -1,4 +1,4 @@
-# Working on ios-sweet
+# Working on ios-v60
 
 - Read `NOTES.md` before starting; it contains the project goal, hardware facts,
   current blocker, local artifact locations and the next concrete action.
@@ -7,10 +7,12 @@
   build/boot results and unfinished work. Distinguish observations from guesses.
 - Commit completed changes. Use `gh` for GitHub Actions kernel builds and logs.
   Local single-file cross-compiles are useful before spending a CI run.
-- Device bring-up uses temporary `fastboot boot` images. Preserve the Android
-  installation and partition backups. The user approved (2026-10-15) using
-  internal UFS for iOS and said Android may be deleted: the iOS root goes
-  into the existing `userdata` partition (no GPT changes). Keep bootloaders,
-  recovery, modem, persist and the backups intact, and confirm each
-  destructive step with the user before running it.
+- Device bring-up uses temporary `fastboot boot` images. Preserve Android,
+  bootloaders, recovery, modem, persist and all backups. Prior upstream-device
+  destructive approvals do not apply to the current V60. Require explicit user
+  authorization for each destructive device operation. Do not flash just to test.
+- Distinguish user-confirmed touch4 success from touch5 software-only checks.
+  Never describe target60Hz as measured60fps or GUI icons as working hardware.
+- The fixed-image builder requires the original baseline SHA; full matching
+  XNU build provenance is still unresolved. Preserve the user base port changes.
 - Keep device dumps, serial numbers and downloaded Apple artifacts out of git.

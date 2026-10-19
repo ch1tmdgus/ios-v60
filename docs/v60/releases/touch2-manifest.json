@@ -1,0 +1,54 @@
+{
+  "baseline_sha256": "6c916223cf86aca1caf13d4e490a20c519dfc7f315671bb494e643a2d31ab816",
+  "method": "in-place replacement of disabled touch module; same fixed kernel VA layout",
+  "module_va": "0xfffffe00074e9168",
+  "module_limit": "0xfffffe00074eb4d0",
+  "module_size": 5372,
+  "payload_patch_offset": "0x4e5558",
+  "hid_literal_changes": [
+    {
+      "va": "0xfffffe0007a6cbd8",
+      "payload_offset": 10915784,
+      "old": "0x52812be8",
+      "new": "0x52813368"
+    },
+    {
+      "va": "0xfffffe0007a6cbdc",
+      "payload_offset": 10915788,
+      "old": "0x71257edf",
+      "new": "0x71266edf"
+    },
+    {
+      "va": "0xfffffe0007a6cc9c",
+      "payload_offset": 10915980,
+      "old": "0x528125e8",
+      "new": "0x52812d68"
+    }
+  ],
+  "original_code_sha256": "3242bcfe150351cb24d6bdd1c00bf2fbbafd5c52cf772cef58567da5f90bd3fd",
+  "module_sha256": "e7729b8af1f4792a2b3a14e70470c925535dcfbb5f5d4eb8b375ed882c0e9438",
+  "preserved": {
+    "shim_sha256": "d93b4482cd7f81e39320349e673c79f563fcdfb8bf29ed53f7df78f852050a1f",
+    "dtb_sha256": "2b7d6d2cf7f7a9b7344e73a5550a4a4fdbf016ce1cf540eef55bf7f21aa25a63"
+  },
+  "outputs": [
+    {
+      "file": "v60-xnu-touch2-gui.img",
+      "sha256": "2a405b7fd16d3d6d20d720706649ff50a538b25891749301fecaea44a48a1f90",
+      "cmdline": "debug=0xc serial=3 cpus=4 keepsyms=1 -enable_kprintf_spam -noprogress rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweettouch=0 sweetkeys=0 sweetusb=0 sweetfb_noconsole=1 sweetfb_hz=30 v60touch=1 v60touchdelay=60",
+      "mode": 1
+    },
+    {
+      "file": "v60-xnu-touch2-diag.img",
+      "sha256": "c5ad0bf5e051fc79a0d9a2c1fb76be74d8aa567a9e1e723f4d8677ef92183b2c",
+      "cmdline": "debug=0xc serial=3 cpus=4 keepsyms=1 -enable_kprintf_spam -noprogress rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweettouch=0 sweetkeys=0 sweetusb=0 sweetfb_noconsole=0 sweetfb_hz=30 v60touch=1 v60touchdelay=60",
+      "mode": 1
+    },
+    {
+      "file": "v60-xnu-touch2-probe.img",
+      "sha256": "9220990c5c0bade50acf929caceba5385d776e0f281e50febdc472d65364e2de",
+      "cmdline": "debug=0xc serial=3 cpus=4 keepsyms=1 -enable_kprintf_spam -noprogress rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweettouch=0 sweetkeys=0 sweetusb=0 sweetfb_noconsole=0 sweetfb_hz=30 v60touch=2 v60touchdelay=60",
+      "mode": 2
+    }
+  ]
+}

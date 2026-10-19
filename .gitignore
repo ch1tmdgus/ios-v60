@@ -10,3 +10,17 @@ xnu/out-*/
 __pycache__/
 .DS_Store
 xnu/.DS_Store
+
+# Local device inputs and generated artifacts (images are Release assets).
+/work/
+/outputs/
+*.img
+*.dtb
+*.dtbo
+*.HEIC
+*.heic
+*.log
+/dt.tar
+/v60.zip
+/v60-touch-log*.txt
+/v60-touch*-log.txt

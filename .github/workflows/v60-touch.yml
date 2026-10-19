@@ -1,0 +1,21 @@
+name: V60 touch host checks
+on:
+  push:
+    paths: ['v60-touch/**', '.github/workflows/v60-touch.yml']
+  pull_request:
+    paths: ['v60-touch/**', '.github/workflows/v60-touch.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross compiler and QEMU
+        run: sudo apt-get update && sudo apt-get install -y clang gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu qemu-system-arm
+      - name: Packet, GPIO bus model and Apple ABI checks
+        env:
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: python3 v60-touch/test.py --out work/touch-tests

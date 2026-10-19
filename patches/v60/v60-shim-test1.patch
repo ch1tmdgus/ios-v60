@@ -1,0 +1,79 @@
+diff -ru -x out -x '*.dtb' ios-sweet/shim/build.sh v60shim/build.sh
+--- ios-sweet/shim/build.sh	2026-10-18 19:17:35.562434093 +0000
++++ v60shim/build.sh	2026-10-18 19:19:27.842093831 +0000
+@@ -1,5 +1,5 @@
+ #!/bin/bash
+-# Build the shim and wrap it in a boot.img v2 that mirrors the stock PixelOS header.
++# Build the shim and wrap it in a boot.img v2 that matches the V60 (timelm) BoardConfig header.
+ set -euo pipefail
+ cd "$(dirname "$0")"
+ CC=aarch64-linux-gnu-gcc
+@@ -27,7 +27,7 @@
+ 	(cd out && rm -rf rd && mkdir rd && cd rd && find . | cpio -o -H newc --quiet | gzip -9 > ../ramdisk.bin)
+ fi
+ mkbootimg --header_version 2 --kernel out/Image --ramdisk out/ramdisk.bin \
+-	--dtb ../dtb/boot_unpacked/dtb --base 0 --kernel_offset 0x8000 --ramdisk_offset 0x1000000 \
++	--dtb "${DTB:-../dtb/boot_unpacked/dtb}" --base 0 --kernel_offset 0x8000 --ramdisk_offset 0x1000000 \
+ 	--tags_offset 0x100 --dtb_offset 0x1f00000 --pagesize 4096 \
+ 	--os_version 17.0.0 --os_patch_level 2035-06 \
+ 	--cmdline "console=null" -o out/shim-boot.img
+diff -ru -x out -x '*.dtb' ios-sweet/shim/console.h v60shim/console.h
+--- ios-sweet/shim/console.h	2026-10-18 19:17:35.564362118 +0000
++++ v60shim/console.h	2026-10-18 19:19:22.728557700 +0000
+@@ -3,7 +3,7 @@
+ 
+ #define FB_BASE		0x9c000000UL	/* reserved-memory cont_splash_region */
+ #define FB_W		1080
+-#define FB_H		2400
++#define FB_H		2460
+ #define FB_STRIDE	(FB_W * 4)	/* a8r8g8b8, matches mainline simplefb */
+ 
+ #define RED	0xffff0000U
+diff -ru -x out -x '*.dtb' ios-sweet/shim/shim.c v60shim/shim.c
+--- ios-sweet/shim/shim.c	2026-10-18 19:17:35.564362118 +0000
++++ v60shim/shim.c	2026-10-18 19:19:22.778590735 +0000
+@@ -12,7 +12,7 @@
+ #include "loader.h"
+ #include "ufs.h"
+ 
+-#define IMEM_RESTART_REASON	0x146aa65cUL	/* qcom,msm-imem restart_reason@65c */
++#define IMEM_RESTART_REASON	0x146bf65cUL	/* V60 live DT: qcom,msm-imem@146bf000 + restart_reason@65c */
+ #define RESTART_BOOTLOADER	0x77665500U
+ #define PSHOLD			0x0c264000UL
+ 
+@@ -30,8 +30,8 @@
+ #define GICR_ISPENDR0		(GICR_SGI + 0x200)
+ #define GICR_ISACTIVER0		(GICR_SGI + 0x300)
+ #define GICR_ICFGR1		(GICR_SGI + 0xc04)
+-#define VTIMER_INTID		19	/* DT: <GIC_PPI 3 ...>, not the usual 27 */
+-#define PTIMER_INTID		18	/* DT: <GIC_PPI 2 ...> */
++#define VTIMER_INTID		27	/* V60 DT: <GIC_PPI 11> (standard) */
++#define PTIMER_INTID		30	/* V60 DT: <GIC_PPI 14> */
+ #define SGI_INTID		1
+ 
+ #define PSCI_VERSION		0x84000000UL
+@@ -374,10 +374,23 @@
+ {
+ 	struct mmu_info mi;
+ 
++	/*
++	 * V60 bring-up test 1: does writing the cont_splash framebuffer change what
++	 * the SW43103 command-mode panel shows? Three solid colours, 3 s each.
++	 * If the screen never changes, the panel needs an MDP/DSI kick per frame.
++	 */
++	stage = "fbtest";
++	con_clear(RED);
++	delay_ms(3000);
++	con_clear(GREEN);
++	delay_ms(3000);
++	con_clear(BLUE);
++	delay_ms(3000);
++
+ 	/* An xnu payload in the ramdisk means: boot it (MMU stays off). */
+ 	stage = "loader";
+ 	con_clear(RED);
+-	con_str("SHIM", "sweet milestone 4: xnu loader");
++	con_str("SHIM", "V60 test: fb + ufs probe");
+ 	con_skip();
+ 	const char *why = loader_boot(dtb);
+ 	con_str("LOADER", why);
