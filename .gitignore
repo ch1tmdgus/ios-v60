@@ -30,3 +30,6 @@ xnu/.DS_Store
 # Private wireless firmware reference archives
 v60-wireless*.zip
 wireless-reference/
+
+# Local agent instructions
+AGENTS.md
