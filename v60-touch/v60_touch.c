@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "protocol.h"
+#include "clock_policy.h"
 typedef unsigned long uptr;
 extern uptr kernel_io_map(uptr, uptr);
 extern int kernel_thread_start(void (*)(void *, int), void *, uptr *);
@@ -60,7 +61,11 @@ static void pin(uptr tile,unsigned id,unsigned mux,unsigned pull,int out) {
 }
 static int clocks(struct state *s) {
     /* gcc-kona: wrap1 core/core2x/AHB vote bits 18..21, S5 bit27, at 0x52008. */
-    wr(s->gcc,0x52008,rd(s->gcc,0x52008)|(15u<<18)|(1u<<27));
+    uint32_t votes=(15u<<18)|(1u<<27);
+    wr(s->gcc,0x52008,rd(s->gcc,0x52008)|votes);
+    if((rd(s->gcc,0x52008)&votes)!=votes) {
+        logmsg("V60 TOUCH: clock vote not accepted; stop\n");return -1;
+    }
     uint32_t dfs=rd(s->gcc,0x18614), cfg=rd(s->gcc,0x18604);
     logmsg("V60 TOUCH: GCC vote=%x cfg=%x dfs=%x\n",rd(s->gcc,0x52008),cfg,dfs);
     if(dfs&1) {
@@ -72,8 +77,17 @@ static int clocks(struct state *s) {
         if(clear_wait(s->gcc,0x18600,1))return -1;
     }
     const unsigned branches[]={0x18004,0x18008,0x23140,0x23138,0x185fc};
-    for(unsigned i=0;i<5;i++)if(clear_wait(s->gcc,branches[i],1u<<31)) {
-        logmsg("V60 TOUCH: clock halted off=%x value=%x\n",branches[i],rd(s->gcc,branches[i]));return -1;
+    for(unsigned i=0;i<5;i++) {
+        uint32_t value=rd(s->gcc,branches[i]);
+        unsigned tries=0;
+        while(!v60_clock_ready(branches[i],value) && tries++<5000) {
+            kernel_delay(1);value=rd(s->gcc,branches[i]);
+        }
+        logmsg("V60 TOUCH: branch off=%x value=%x hwcg=%u ready=%u\n",
+            branches[i],value,v60_clock_hwcg(branches[i],value),v60_clock_ready(branches[i],value));
+        if(!v60_clock_ready(branches[i],value)) {
+            logmsg("V60 TOUCH: clock halted off=%x value=%x\n",branches[i],value);return -1;
+        }
     }
     return 0;
 }
@@ -173,7 +187,7 @@ static void worker(void *arg,int result) {
     kernel_bootarg("v60touchdelay",&delay_s,sizeof(delay_s));
     kernel_bootarg("v60touch",&mode,sizeof(mode));
     if(delay_s>300)delay_s=300;
-    logmsg("V60 TOUCH: SW42902 driver delay=%u mode=%d\n",delay_s,mode);
+    logmsg("V60 TOUCH: touch2 SW42902 driver delay=%u mode=%d\n",delay_s,mode);
     kernel_sleep(delay_s*1000);
     struct state s={0};
     s.gcc=kernel_io_map(0x100000,0x60000);

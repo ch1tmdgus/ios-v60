@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "protocol.h"
+#include "clock_policy.h"
 static void put(uint8_t *p,uint32_t v){for(int i=0;i<4;i++)p[i]=(uint8_t)(v>>(8*i));}
 static void point(uint8_t *b,int slot,unsigned id,unsigned ev,unsigned x,unsigned y){put(b+36+12*slot,id|(ev<<16)|(x<<18));put(b+40+12*slot,y);}
 int main(void){
@@ -23,5 +24,17 @@ int main(void){
  put(b+8,0x80000100);assert(v60_decode(b,sizeof(b),&f)==0 && f.mask==0);
  put(b+8,1<<8);point(b,0,15,1,0,0);assert(v60_decode(b,sizeof(b),&f)==0 && f.mask==0);
  assert(v60_decode(b,sizeof(b)-1,&f)==-1);
- puts("SW42902 packet decoder: 15 checks PASS");return 0;
+ puts("SW42902 packet decoder: 15 checks PASS");
+ assert(v60_clock_ready(0x18008,0x80000002)); /* observed on V60 */
+ assert(v60_clock_hwcg(0x18008,0x80000002));
+ assert(v60_clock_ready(0x18008,2));
+ assert(v60_clock_ready(0x18008,0));
+ assert(!v60_clock_ready(0x18008,0x80000000));
+ assert(!v60_clock_ready(0x18008,0x80000001));
+ assert(!v60_clock_ready(0x18004,0x80000002));
+ assert(!v60_clock_ready(0x23138,0x80000002));
+ assert(!v60_clock_ready(0x23140,0x80000002));
+ assert(!v60_clock_ready(0x185fc,0x80000002));
+ assert(v60_clock_ready(0x185fc,0));
+ puts("Clock gating policy: 11 checks PASS");return 0;
 }

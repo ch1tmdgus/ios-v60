@@ -1,9 +1,41 @@
-# V60 SW42902 touch1 — 실기기 시험용
+# V60 SW42902 touch2 — 실기기 시험용
 
 현재 상태는 **코드 작성·빌드·정적 검사 완료, V60 실기기 터치 미검증**입니다.
 전체 XNU 소스가 없어 커널 전체를 재빌드한 결과가 아닙니다. 제공된 특정
 `v60-xnu-boot2-gui.img`에서 심볼을 확인한 뒤, 기존의 비활성 터치 모듈을
 이 폴더의 코드로 교체하고 HID 좌표 상수 세 개를 보정한 실험 이미지입니다.
+
+
+## touch2 변경: HWCG 클럭 준비 판정
+
+실기기 touch1 로그는 다음 위치에서 종료됐습니다:
+
+```text
+GCC vote=c3c0040 cfg=100000 dfs=21
+clock halted off=18008 value=80000002
+worker stopped
+```
+
+이 시점에는 `engine()` 및 터치 칩 ID 읽기를 아직 실행하지 않았습니다.
+GPIO 상태 로그의 0은 전원 설정 전 읽은 값이므로 전원 설정 실패의 증거가 아닙니다.
+
+`gcc-kona.c`의 wrap1 S_AHB는 offset=0x18008, hwcg_bit=1입니다.
+`clk-branch.c:clk_branch_wait()`는 HWCG가 켜져 있으면 HALT 대기를 생략합니다.
+touch1에는 이 예외가 없어서 HWCG idle 상태를 실패로 처리했습니다.
+
+touch2는 해당 레지스터의 HWCG 비트가 1일 때만 같은 예외를 적용합니다.
+다른 네 클럭의 HALT 검사는 유지하고 요청한 clock vote의 읽기값도 확인합니다.
+HWCG 비트를 강제로 끄거나, 모든 HALT 오류를 무시하는 변경은 하지 않았습니다.
+각 branch의 offset/value/hwcg/ready를 추가로 로그에 남깁니다.
+`ready=1`은 소스의 준비 판정을 통과했다는 뜻으로 실제 I2C 통신 성공은 별도입니다.
+
+새 판정의 회귀 검사 11개는 제공 로그의 `0x80000002`를 허용하고,
+HWCG 비트가 없거나 다른 branch가 같은 값을 보이는 경우에는 실패 처리함을 확인합니다.
+이 수정으로 첫 조기 중단 원인을 고쳤지만, 이후 펌웨어·전원·칩 응답·HID는 아직
+실기기에서 확인하지 못했습니다.
+
+먼저 `v60-xnu-touch2-diag.img`로 부팅해 같은 방식으로 로그를 수집해 주세요.
+GUI/diag/probe는 같은 새 코드를 사용하며 표시 옵션과 모드만 다릅니다.
 
 ## 확인한 원인과 하드웨어
 
@@ -32,7 +64,7 @@ Rofik 커널 7eab1a7189a7aba0a0c4a30ba616619e097ced52에서 다음을 대조했�
 정상 부팅됐던 boot2 이미지를 보관하고, **임시 부팅**으로 시험합니다:
 
 ```sh
-fastboot boot v60-xnu-touch1-gui.img
+fastboot boot v60-xnu-touch2-gui.img
 ```
 
 드라이버는 커널 초기화 후 기본 60초를 기다렸다가 시작합니다.
@@ -48,20 +80,20 @@ fastboot boot v60-xnu-touch1-gui.img
 ## 안 되면 로그용 이미지
 
 ```sh
-fastboot boot v60-xnu-touch1-diag.img
+fastboot boot v60-xnu-touch2-diag.img
 ```
 
 동일한 터치 동작을 시도하되 커널 콘솔을 켭니다. `V60 TOUCH:` 줄을
 촬영해 주세요. GUI가 콘솔 글자를 덮을 수 있으므로 영상이나 영구 로그가 유용합니다.
 
-`v60-xnu-touch1-probe.img`는 SoC clock/GPIO/GENI를 설정한 뒤 칩 ID만 읽고
+`v60-xnu-touch2-probe.img`는 SoC clock/GPIO/GENI를 설정한 뒤 칩 ID만 읽고
 종료하는 비교용입니다. 이 모드는 컨트롤러의 동작 제어 레지스터를 쓰지 않지만,
 SoC 레지스터·전원 GPIO 변경은 수행하므로 완전한 하드웨어 읽기 전용 검사는 아닙니다.
 
 정상적인 초기화 로그 예시(아직 실기기에서 관찰한 결과가 아님):
 
 ```text
-V60 TOUCH: SW42902 driver delay=60 mode=1
+V60 TOUCH: touch2 SW42902 driver delay=60 mode=1
 V60 TOUCH: SE13 fw=... status=... tx=... rx=...
 V60 TOUCH: probe 0x28 rc=0 version=... irq=...
 V60 TOUCH: polling 0x600, 10ms; finger events -> HID
@@ -123,7 +155,7 @@ python3 v60-touch/test.py --out work/touch-tests
 
 수행한 확인:
 
-- SW42902 패킷 해석 15개 검사, AddressSanitizer/UndefinedBehaviorSanitizer 통과.
+- SW42902 패킷 해석 15개 및 클럭 판정 11개 검사, AddressSanitizer/UndefinedBehaviorSanitizer 통과.
 - Apple arm64 varargs stack slot 및 FP/LR 보존을 QEMU로 확인.
   Apple-target clang의 실제 호출 코드와도 stack layout을 대조.
 - 모듈 크기 제한, 미해결 심볼/전역 BSS/데이터 없음 확인.

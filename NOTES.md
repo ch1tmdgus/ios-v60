@@ -1,5 +1,27 @@
 # V60 local handoff — 2026-10-19
 
+## touch2: fix HWCG halt-policy mismatch found in touch1 device log
+
+- User successfully pulled persistent ring, flush=43. V60 TOUCH lines:
+  driver delay60 mode1; GPIO38/39/67/68 all0 (read BEFORE power setup);
+  GCC vote=0x0c3c0040 cfg=0x100000 dfs=0x21;
+  clock halted off=0x18008 value=0x80000002; worker stopped.
+- Exact first blocker: touch1 clocks() required CLK_OFF clear on every
+  branch. Rofik gcc-kona wrap1 S_AHB declares hwcg_reg=0x18008 bit1, and
+  clk-branch.c clk_branch_wait skips halt polling while HWCG enabled.
+  Thus observed value satisfies vendor HWCG exception. It does not prove
+  that subsequent GENI/controller initialization will succeed.
+- Added clock_policy.h, scoped exception only to0x18008 when bit1 set;
+  other branches still checked. Added clock-vote readback guard and per-
+  branch off/value/hwcg/ready logs. No forced HWCG disable or blanket skip.
+- Builder now outputs touch2 GUI/diag/probe from SAME original boot2 input;
+  old touch1 deliverables remain preserved. Module size5372 of9064 bytes.
+- Tests: packet decoder15, clock policy11 (including actual observed value
+  and negative cases), ASan/UBSan, QEMU varargs bridge pass. Hardware touch2
+  pending. NEXT: user boots touch2-diag and collects V60 TOUCH lines beyond
+  old clock failure; inspect first subsequent blocker before changes.
+
+
 ## touch1 follow-up: no touch; photo has no driver result
 
 - User tested touch1 diag: touch still unavailable. Attached photo shows
