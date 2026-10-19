@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import importlib.util,json,subprocess,tempfile,unittest,zipfile
 from pathlib import Path
+from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('collector',Path(__file__).parents[1]/'v60-wireless-collect.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 class FakeAdb:
@@ -35,6 +36,20 @@ class FakeAdb:
   return 0,b'',b''
 
 class CollectorTest(unittest.TestCase):
+ def test_shell_status_and_binary(self):
+  with patch.object(m.subprocess,'run',return_value=subprocess.CompletedProcess([],1,b'raw\x00bytes',b'failure')) as run:
+   self.assertEqual(m.Adb().run('test -d /missing'),(1,b'raw\x00bytes',b'failure'))
+   self.assertEqual(run.call_args.args[0],['adb','shell','-T',"sh -c 'test -d /missing'"])
+ def test_device_selection(self):
+  for state in ('device','recovery'):
+   listing='List of devices attached\nTEST '+state+'\n'
+   self.assertEqual(m.select_device(listing),'TEST')
+   self.assertEqual(m.select_device(listing,'TEST'),'TEST')
+  self.assertEqual(m.select_device('A recovery\nB device','B'),'B')
+ def test_device_selection_errors(self):
+  for listing,serial,message in (('',None,'No adb device'),('A recovery\nB device',None,'Multiple'),('A recovery','B','not listed'),('A unauthorized',None,'unauthorized'),('A offline',None,'offline'),('A sideload',None,'sideload'),('A bootloader',None,'ADB shell')):
+   with self.subTest(listing=listing):
+    with self.assertRaisesRegex(ValueError,message):m.select_device(listing,serial)
  def test_paths(self):
   for path in ('/persist/nvm.bin','/vendor/firmware/../nvm.bin','/vendor/firmware/evil;name.bin'):
    self.assertFalse(m.inside(path,m.FIRMWARE_ROOTS))
@@ -62,6 +77,17 @@ class CollectorTest(unittest.TestCase):
    self.assertEqual(len([x for x in adb.calls if x[0]=='umount']),2)
    opts=[x[4] for x in adb.calls if x[0]=='mount'];self.assertEqual(opts,['ro,noload','ro'])
    self.assertFalse(any('wlan_mac.bin' in x[-1] for x in adb.calls if x[0]=='read'))
+ def test_toybox_blkid_fallback(self):
+  adb=FakeAdb();original=adb.text
+  def text(*args):
+   if args[0]=='blkid':return ''
+   if args[:2]==('toybox','blkid'):return original('blkid',args[2])
+   return original(*args)
+  adb.text=text
+  with tempfile.TemporaryDirectory() as d:
+   r=m.collect(adb,Path(d)/'dump.zip',True,True)
+   self.assertEqual(len(r['temporary_mounts']),2)
+   self.assertTrue(all(x['ok'] for x in r['temporary_mounts']))
  def test_timeout_cleanup(self):
   adb=FakeAdb();adb.timeout_mount=True
   with tempfile.TemporaryDirectory() as d:

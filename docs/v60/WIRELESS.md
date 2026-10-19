@@ -61,9 +61,12 @@ python3 tools/v60-wireless-collect.py --include-firmware --mount-vendor-ro --out
   firmware symlink가 허용 경로 밖으로 벗어나면 읽지 않습니다.
 - 파일당16MiB/합계96MiB 제한. 기존 출력 ZIP은 덮어쓰지 않습니다.
 
-이 도구의 read-only mount/정리와 경로/용량 제한은 **모의 adb 검사**를 통과했지만
-recovery에서의 실제 실행은 아직 미검증입니다. firmware가0개면 수집 성공으로
-판정하지 말고 `report.json`의 mount 결과/경로를 확인합니다.
+2026-10-20 실제 recovery에서 modem을 읽기 전용 마운트해 Wi-Fi firmware/board
+파일30개를 수집했고, ZIP 무결성과 임시 mount 해제를 확인했습니다. Bluetooth firmware는
+아직 확보하지 못했습니다. 현재 recovery에는 vendor logical block 장치가 없습니다.
+`recovery` ADB 상태를 허용하고, 원격 실패 상태를 전달하는 `adb shell -T`를 사용하며,
+독립 `blkid`가 없으면 `toybox blkid`를 사용합니다. 관련 모의 검사15개도 통과했습니다.
+firmware가0개면 `report.json`의 mount 결과/경로를 확인합니다.
 
 생성된 ZIP은 다음 개발에 필요한 **비공개 입력 자료**이며 Git/Release에 올리지 않습니다.
 원래 vendor가 남아 있고 recovery가 파일시스템을 지원해야 합니다. `vendor_b` 같은 이름을

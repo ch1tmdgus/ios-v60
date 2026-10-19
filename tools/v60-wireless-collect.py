@@ -32,7 +32,7 @@ class Adb:
  def __init__(self,serial=None):
   self.prefix=['adb']+(['-s',serial] if serial else [])
  def run(self,command,timeout=20):
-  p=subprocess.run([*self.prefix,'exec-out','sh -c '+shlex.quote(command)],capture_output=True,timeout=timeout)
+  p=subprocess.run([*self.prefix,'shell','-T','sh -c '+shlex.quote(command)],capture_output=True,timeout=timeout)
   return p.returncode,p.stdout,p.stderr
  def command(self,*args):return self.run(shlex.join(args))
  def text(self,*args):
@@ -67,7 +67,8 @@ class RecoveryMounts:
   a=self.adb
   for block in block_candidates(kind,slot):
    if not a.exists(block,'b'):continue
-   result=a.text('blkid',block);m=re.search(r'\bTYPE="([a-z0-9]+)"',result)
+   result=a.text('blkid',block) or a.text('toybox','blkid',block)
+   m=re.search(r'\bTYPE="([a-z0-9]+)"',result)
    if not m:continue
    fs=m.group(1)
    try:options=mount_options(fs)
@@ -168,13 +169,27 @@ def collect(adb,out,include_firmware=False,mount_ro=False):
   for name,data in blobs.items():z.writestr(name,data)
  return report
 
+def select_device(listing,serial=None):
+ devices=[parts[:2] for line in listing.splitlines() if len(parts:=line.split())>=2 and parts[1] in ('device','recovery','offline','unauthorized','sideload','bootloader')]
+ if serial:
+  devices=[d for d in devices if d[0]==serial]
+  if not devices:raise ValueError('Specified --serial is not listed by adb; check recovery USB/ADB connection')
+ elif not devices:raise ValueError('No adb device found; enable ADB in recovery and check the USB cable')
+ if len(devices)!=1:raise ValueError('Multiple adb devices found; select one with --serial')
+ selected,state=devices[0]
+ if state=='unauthorized':raise ValueError('ADB is unauthorized; approve this computer on the device')
+ if state=='offline':raise ValueError('ADB device is offline; reconnect USB and check recovery ADB')
+ if state=='sideload':raise ValueError('Device is in sideload mode; leave sideload and enable normal recovery ADB')
+ if state not in ('device','recovery'):raise ValueError('Device is not available for an ADB shell; boot recovery')
+ return selected
+
 def main():
  ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--serial');ap.add_argument('--include-firmware',action='store_true');ap.add_argument('--mount-vendor-ro',action='store_true');a=ap.parse_args()
- if not a.serial:
-  p=subprocess.run(['adb','devices'],capture_output=True,text=True,timeout=10)
-  devices=[line.split() for line in p.stdout.splitlines()[1:] if line.strip()]
-  if len(devices)!=1 or devices[0][1]!='device':raise SystemExit('Connect exactly one adb device in recovery, or specify --serial')
- report=collect(Adb(a.serial),a.out,a.include_firmware,a.mount_vendor_ro)
+ p=subprocess.run(['adb','devices'],capture_output=True,text=True,timeout=10)
+ if p.returncode:raise SystemExit('adb devices failed; check adb installation and server')
+ try:serial=select_device(p.stdout,a.serial)
+ except ValueError as e:raise SystemExit(str(e))
+ report=collect(Adb(serial),a.out,a.include_firmware,a.mount_vendor_ro)
  print('Saved private wireless reference:',a.out)
  print('Firmware candidates:',len(report['firmware']),'included:',sum(x['included'] for x in report['firmware']))
  if not report['firmware']:print('No firmware files found; inspect report.json for missing mounts. No wireless fix image was generated.')
