@@ -153,3 +153,8 @@ Default builds retain the previous touch5 image bytes.
 
 Next UART FIFO transport test: [WIRELESS2](../docs/v60/WIRELESS2.md).
 Use `--wireless-loopback` instead of `--wireless-probe` to build wireless2.
+
+After confirmed hardware loopback success, [WIRELESS3](../docs/v60/WIRELESS3.md)
+adds guarded V60 power votes and an external QCA version query. Build with
+`--wireless-hci`. This mode reclaims adjacent unused RPMh text and performs
+additional reference audits; it is still restricted to the exact baseline.

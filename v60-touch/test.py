@@ -13,8 +13,12 @@ run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined
 run(a.out/'wireless_probe_test')
 run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/'uart_loopback_test.c','-o',a.out/'uart_loopback_test')
 run(a.out/'uart_loopback_test')
+for name in ['bt_power_test','bt_hci_test','bt_uart_test']:
+ run('clang','-O1','-g','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',r/(name+'.c'),'-o',a.out/name)
+ run(a.out/name)
 run(pre+'gcc','-c',r/'printf_bridge.S','-o',a.out/'bridge.o')
 run(pre+'gcc','-c',r/'tests/printf_bridge_test.S','-o',a.out/'bridge_test.o')
 run(pre+'ld','-T',r/'tests/printf_bridge_test.ld',a.out/'bridge_test.o',a.out/'bridge.o','-o',a.out/'bridge_test.elf')
 run('qemu-system-aarch64','-M','virt','-cpu','cortex-a76','-m','256','-display','none','-serial','none','-monitor','none','-semihosting-config','enable=on,target=native','-kernel',a.out/'bridge_test.elf')
 print('Apple arm64 varargs stack slots, frame pointer and return address: PASS')
+run('python3','-m','unittest','discover','-s',r,'-p','build_test.py','-v')

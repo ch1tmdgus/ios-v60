@@ -53,7 +53,8 @@ function for success, wrong protocol/width/FIFO mode, dirty/busy/DMA/GSI,
 TX/RX timeouts, start failure, corrupt data, wrong FIFO count, error IRQ,
 cancel/abort failures and saved-register restore. Existing clock-gate, touch,
 GPIO I2C and QEMU Apple ABI checks pass. Rebuilt wireless1 and all4 default
-touch5 images reproduce previous hashes. Wireless2 itself is not device-tested.
+touch5 images reproduce previous hashes. User device result later PASS: both patterns match, passed2/2 fail0 stopped1,
+settings restored. See [WIRELESS3](WIRELESS3.md) for power/external HCI query.
 
 ## Next implementation
 

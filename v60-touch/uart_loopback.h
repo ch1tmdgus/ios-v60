@@ -19,6 +19,7 @@ static int uart_stop(uptr se,unsigned status_mask,unsigned ctrl) {
     wr(se,ctrl,2); /* bounded abort fallback */
     return uart_wait(se,0x40,status_mask,0);
 }
+#if !defined(V60_WIRELESS_PROBE) || V60_WIRELESS_PROBE == 2
 static void uart_loopback(uptr se) {
     uint32_t fw=rd(se,0x68),sfw=rd(se,0x6c),tx=rd(se,0xe24),rx=rd(se,0xe28);
     if(((fw>>8)&255)!=2||((sfw>>8)&255)!=2||(rd(se,0x64)&1)||
@@ -73,3 +74,5 @@ static void uart_loopback(uptr se) {
     for(unsigned i=0;i<sizeof(saved)/sizeof(saved[0]);i++)wr(se,offsets[i],saved[i]);
     logmsg("V60 WIRELESS: loopback restored; no external HCI sent\n");
 }
+
+#endif

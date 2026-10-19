@@ -1,3 +1,40 @@
+# wireless2 HARDWARE PASS; wireless3 power/HCI image — 2026-10-20
+
+- USER actual wireless2: tx/rx963ca569 and c3695a96 both match, passed2/2 fail0,
+  stopped1 status0 and restored. Touch/buttons continue in provided log.
+- Built outputs/v60-xnu-wireless3-diag.img, SHA256
+  810048d5050e131816c5e9af8fa8694dc512f10c7df2d73f690ad1578198e3d2.
+  Bundle outputs/v60-wireless3-test.zip with manifest/puller/instructions.
+  NOT DEVICE-TESTED. This now performs actual temporary BT power/reset/HCI;
+  unlike wireless1/2, it is not a read-only UART inventory/loopback-only image.
+- Recovery ADB read-only DT confirms appsDRV2 reg18220000, TCSoffsetd00,
+  ACTIVE2/SLEEP3/WAKE3/CONTROL1, cmd-db reserved80860000/20000. No BT clock or
+  current-level properties. CONFIG_SERIAL_MSM_GENI_HALF_SAMPLING=y verified.
+- Three exact rail requests: smpa6 950mV(AON+DIG shared), smpa5 1900mV,
+  smpc8 1350mV. Resolve all cmd-dbVRM entries before writes, strict geometry,
+  free ACTIVE slots only, conflict guards, own IRQ only,2ACK commands(V/enable),
+  no mode/headroom vote, no SLEEP/WAKE/direct SPMI writes.100ms bounds; on any
+  uncertainty leave slot masked/quarantined and stop ALL further requests.
+  BT_EN remains untouched on power failure. ACK is not measured rail voltage.
+- After success: GPLL0 validated600MHz/even÷2, no PLL reprogramming; SE6 root
+  7372800Hz M384/N15625,UARTdiv4/16x ->115200 8N1 CTS/RTS. Pins16..19 qup6;
+  BT_EN21 low50ms/high50ms. ONLY H4 EDL version query01 00 fc 01 19,64B/2s
+  bounded receive. Then BTresetLOW, pins/UART/root restore when idle. Shared
+  voltage/enable votes retained this boot. No firmware/MAC/NVM transfer/scan.
+- Existing fixed region was too small: wireless3 also reclaims adjacent unused
+  Redmi RPMh helper text, ending exactly before sweet_spmi_init@74ec4f4.
+  Module13112/13196. Exact baseline guard; builder audits2,183,965 outside
+  executable instructions and loaded raw pointers (not linkedit symbols):0
+  incoming references to reclaimed helper. Shim/ADT/DTB/SPMI unchanged.
+- Actual-code ASan/UBSan models PASS for power/DB/conflict/timeout/quarantine,
+  HCI framing/baud/pins/power-before-reset/bounds/parity/cancel/abort/restore.
+  Five reclaim-audit unit tests PASS. Existing touch/I2C/clock/QEMU ABI PASS.
+  Rebuilt wireless1/2 + all4 touch5 images reproduce previous hashes.
+- NEXT: user temporary boot wireless3,wait3min,existing recovery,pull complete
+  V60 WIRELESS log. Need actual RPMh done and QCA product/ROM/SoC response.
+  Unsupported clock/RSC stops deliberately. No claim of working BT/iOS pairing
+  or Wi-Fi; full wireless stack remains unimplemented. See WIRELESS3.md.
+
 # wireless1 hardware result and wireless2 build — 2026-10-20
 
 - USER ACTUAL wireless1 log: all5 wrap0/SE6 branches ready, GCC vote c3d03c0,

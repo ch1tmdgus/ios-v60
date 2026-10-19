@@ -2,20 +2,25 @@
  * Phase1: QUP0/SE6 clock enable + UART/pin inventory.
  * Phase2: same clock gate, then owned internal UART FIFO loopback.
  * Source: Rofik gcc-kona.c, pinctrl-kona.c, qcom-geni-se.h at7eab1a7.
- * Never access SE12 console, PMIC, PCIe, HCI or radio reset.
+ * Phase3: verified V60-only RPMh supplies, external UART and HCI query.
+ * No SE12 console, direct SPMI writes, PCIe or DMA.
  * Phase1 does not read RX FIFO data; phase2 reads only its own test bytes.
  */
 #include "wireless_policy.h"
 #if V60_WIRELESS_PROBE == 2
 #include "uart_loopback.h"
+#elif V60_WIRELESS_PROBE == 3
+#include "bt_uart.h"
 #endif
 static void wireless_worker(void *arg,int result) {
     (void)arg;(void)result;
     kernel_sleep(90000); /* Touch worker initializes at60s; independent thread. */
 #if V60_WIRELESS_PROBE == 1
     logmsg("V60 WIRELESS: wireless1 QCA6390 clock/UART probe begin\n");
-#else
+#elif V60_WIRELESS_PROBE == 2
     logmsg("V60 WIRELESS: wireless2 UART loopback begin\n");
+#else
+    logmsg("V60 WIRELESS: wireless3 power/HCI begin\n");
 #endif
     uptr gcc=kernel_io_map(0x100000,0x60000);
 #if V60_WIRELESS_PROBE == 1
@@ -53,14 +58,18 @@ static void wireless_worker(void *arg,int result) {
     logmsg("V60 WIRELESS: SE6 M_CLK=%x S_CLK=%x IOS=%x DMA=%x\n",rd(se,0x48),rd(se,0x4c),rd(se,0x908),rd(se,0x258));
     logmsg("V60 WIRELESS: SE6 TXparam=%x RXparam=%x TXstatus=%x RXstatus=%x\n",rd(se,0xe24),rd(se,0xe28),rd(se,0x800),rd(se,0x804));
     logmsg("V60 WIRELESS: SE6 M_IRQ=%x S_IRQ=%x; no HCI or firmware transfer\n",rd(se,0x610),rd(se,0x640));
-#else
+#elif V60_WIRELESS_PROBE == 2
     uart_loopback(se);
+#else
+    bt_uart(gcc,se);
 #endif
 done:
 #if V60_WIRELESS_PROBE == 1
     logmsg("V60 WIRELESS: wireless1 probe complete; Wi-Fi/BT not enabled\n");
-#else
+#elif V60_WIRELESS_PROBE == 2
     logmsg("V60 WIRELESS: wireless2 complete; Wi-Fi/BT not enabled\n");
+#else
+    logmsg("V60 WIRELESS: wireless3 complete; no wireless stack\n");
 #endif
     kernel_thread_terminate(kernel_current_thread());
     for(;;)kernel_sleep(1000);

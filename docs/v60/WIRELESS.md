@@ -91,3 +91,8 @@ NVM은 tag ID와 길이만 출력하며 MAC 등 tag 값은 출력하지 않습�
 python3 tools/v60-bt-firmware-info.py /private/path/htbtfw20.tlv
 python3 tools/v60-bt-firmware-info.py /private/path/htnv20.bin
 ```
+
+
+2026-10-20 실기기 진행: [wireless1](WIRELESS1.md) 클럭/UART 상태 확인과
+[wireless2](WIRELESS2.md) 내부 송수신2/2 검증이 완료됐습니다.
+다음 [wireless3](WIRELESS3.md)는 V60 전원 요청과 외부 HCI 버전 질의이며 실기기 대기 중입니다.

@@ -15,9 +15,47 @@ IMPORTS={
 'kernel_bootarg':0xfffffe0007a7742c,'kernel_hid_touch':0xfffffe0007a6d14c,
 }
 def sha(b):return hashlib.sha256(b).hexdigest()
+def audit_reclaimed_rpmh(payload,segments,limit):
+ # The old board-specific RPMh helper is adjacent to the disabled touch module.
+ # Audit executable Mach-O segments for inbound immediate branches before reuse.
+ header=segments[0];off=header[2]
+ assert struct.unpack_from('<I',payload,off)[0]==0xfeedfacf
+ commands=struct.unpack_from('<I',payload,off+16)[0];cursor=off+32;execute=[];linkedit=[]
+ assert commands<512
+ for _ in range(commands):
+  cmd,size=struct.unpack_from('<II',payload,cursor)
+  assert size>=8 and cursor+size<=off+header[3]
+  if cmd==0x19:
+   va,_,_,filesize,_,prot=struct.unpack_from('<4Q2I',payload,cursor+24)
+   if prot&4:execute.append((va,va+filesize))
+   if payload[cursor+8:cursor+24].split(b'\0')[0]==b'__LINKEDIT':linkedit.append((va,va+filesize))
+  cursor+=size
+ scanned=0
+ for va,_,fileoff,filesize in segments:
+  for lower,upper in execute:
+   lo=max(va,lower);hi=min(va+filesize,upper)
+   for pc in range(lo,hi-3,4):
+    if START<=pc<limit:continue
+    word=struct.unpack_from('<I',payload,fileoff+pc-va)[0];bits=0;imm=0
+    if word&0x7c000000==0x14000000:bits=26;imm=word&0x3ffffff
+    elif word&0xff000010==0x54000000 or word&0x7e000000==0x34000000:bits=19;imm=(word>>5)&0x7ffff
+    elif word&0x7e000000==0x36000000:bits=14;imm=(word>>5)&0x3fff
+    if bits:
+     delta=imm-(1<<bits) if imm&(1<<(bits-1)) else imm
+     if END<=pc+delta*4<limit:raise ValueError(f'Incoming branch into reclaimed RPMh text at {pc:#x}')
+    scanned+=1
+ for va,_,fileoff,filesize in segments:
+  for i in range(0,filesize-7,8):
+   pc=va+i
+   if START<=pc<limit or any(lo<=pc<hi for lo,hi in linkedit):continue
+   pointer=struct.unpack_from('<Q',payload,fileoff+i)[0]
+   if END<=pointer<limit:raise ValueError(f'Raw pointer into reclaimed RPMh text at {pc:#x}')
+ return {'incoming_raw_pointers':0,'reclaimed_start':hex(END),'reclaimed_end':hex(limit),'outside_instructions_scanned':scanned,'incoming_immediate_branches':0}
+
 def main():
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('image',type=Path);ap.add_argument('--out',required=True,type=Path);wireless=ap.add_mutually_exclusive_group();wireless.add_argument('--wireless-probe',action='store_true');wireless.add_argument('--wireless-loopback',action='store_true');a=ap.parse_args()
- wireless_version=2 if a.wireless_loopback else int(a.wireless_probe)
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('image',type=Path);ap.add_argument('--out',required=True,type=Path);wireless=ap.add_mutually_exclusive_group();wireless.add_argument('--wireless-probe',action='store_true');wireless.add_argument('--wireless-loopback',action='store_true');wireless.add_argument('--wireless-hci',action='store_true');a=ap.parse_args()
+ wireless_version=3 if a.wireless_hci else 2 if a.wireless_loopback else int(a.wireless_probe)
+ limit=0xfffffe00074ec4f4 if wireless_version==3 else END
  image=a.image.read_bytes()
  if sha(image)!=BASE_SHA:raise SystemExit('REFUSED: input SHA256 does not match the inspected v60-xnu-boot2-gui.img')
  root=Path(__file__).resolve().parent;out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
@@ -30,7 +68,7 @@ def main():
  assert ramdisk[:8]==b'SWEETXNU'
  version,nsegs=struct.unpack_from('<II',ramdisk,8);assert version==1 and nsegs==10
  segments=[struct.unpack_from('<4Q',ramdisk,0x2a8+i*32) for i in range(nsegs)]
- seg=next(s for s in segments if s[0]<=START and END<=s[0]+s[3]);patchoff=seg[2]+START-seg[0]
+ seg=next(s for s in segments if s[0]<=START and limit<=s[0]+s[3]);patchoff=seg[2]+START-seg[0]
  # Exact baseline hash protects entry, import addresses, module boundary and existing fixups.
  prefix=os.environ.get('CROSS_COMPILE','aarch64-elf-')
  flags=['-Os','-ffreestanding','-nostdlib','-fno-builtin','-fno-pic','-fno-stack-protector',
@@ -47,19 +85,20 @@ SECTIONS {{
  .bss : {{ *(.bss*) *(COMMON) }}
  ASSERT(SIZEOF(.data) == 0, "unexpected global data")
  ASSERT(SIZEOF(.bss) == 0, "unexpected BSS")
- ASSERT(. <= 0x{END:x}, "touch replacement exceeds original module")
+ ASSERT(. <= 0x{limit:x}, "touch replacement exceeds original module")
  /DISCARD/ : {{ *(.comment) *(.note*) *(.eh_frame*) }}
 }}
 '''
  (out/'module.ld').write_text(script)
  subprocess.run([prefix+'ld','-T',str(out/'module.ld'),'--build-id=none','-N',str(out/'v60_touch.o'),str(out/'printf_bridge.o'),'-o',str(out/'touch.elf')],check=True)
  subprocess.run([prefix+'objcopy','-O','binary',str(out/'touch.elf'),str(out/'touch.bin')],check=True)
- code=(out/'touch.bin').read_bytes();assert 0<len(code)<=END-START
+ code=(out/'touch.bin').read_bytes();assert 0<len(code)<=limit-START
  nm=subprocess.check_output([prefix+'nm','-n',str(out/'touch.elf')]).decode();(out/'symbols.txt').write_text(nm)
  assert any(line.split()==[f'{START:016x}','T','v60_touch_init'] for line in nm.splitlines())
  # Ensure no unresolved imports and no dynamic relocations remain.
  assert not subprocess.check_output([prefix+'nm','-u',str(out/'touch.elf')]).strip()
  dis=subprocess.check_output([prefix+'objdump','-d',str(out/'touch.elf')]).decode();(out/'disassembly.txt').write_text(dis)
+ audit=audit_reclaimed_rpmh(ramdisk,segments,limit) if wireless_version==3 else None
  payload=bytearray(ramdisk);payload[patchoff:patchoff+len(code)]=code
  # This kernel's HID start() already uses 2460, but touch() retained 2400
  # clamp/edge literals. Correct only the three inspected instructions.
@@ -117,8 +156,8 @@ SECTIONS {{
   prefix_name=f'wireless{wireless_version}' if wireless_version else 'touch5'
   path=out/f'v60-xnu-{prefix_name}-{name}.img';path.write_bytes(boot)
   manifests.append({'file':path.name,'sha256':sha(boot),'cmdline':cmd,'mode':mode,'present_hz_target':hz,'process_samples':sample})
- report={'wireless_probe':wireless_version,'baseline_sha256':BASE_SHA,'method':'touch module replacement plus guarded HID/key constants; fixed kernel VA layout',
-         'module_va':hex(START),'module_limit':hex(END),'module_size':len(code),'payload_patch_offset':hex(patchoff),
+ report={'rpmh_reclaim_audit':audit,'wireless_probe':wireless_version,'baseline_sha256':BASE_SHA,'method':'touch module replacement plus guarded HID/key constants; fixed kernel VA layout',
+         'module_va':hex(START),'module_limit':hex(limit),'module_size':len(code),'payload_patch_offset':hex(patchoff),
          'hid_literal_changes':hid_changes,'key_literal_changes':key_changes,'log_text_changes':text_changes,
          'original_code_sha256':sha(ramdisk[patchoff:patchoff+len(code)]),'module_sha256':sha(code),
          'preserved':{'shim_sha256':sha(kernel),'dtb_sha256':sha(dtb)},'outputs':manifests}
