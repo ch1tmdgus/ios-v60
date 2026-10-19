@@ -4,6 +4,8 @@
   stopped1 status0 and restored. Touch/buttons continue in provided log.
 - Built outputs/v60-xnu-wireless3-diag.img, SHA256
   810048d5050e131816c5e9af8fa8694dc512f10c7df2d73f690ad1578198e3d2.
+  Source commit74c6aa9 pushed. GitHub host-check run39281206932 queued at
+  handoff; local checks above passed, remote CI success not yet claimed.
   Bundle outputs/v60-wireless3-test.zip with manifest/puller/instructions.
   NOT DEVICE-TESTED. This now performs actual temporary BT power/reset/HCI;
   unlike wireless1/2, it is not a read-only UART inventory/loopback-only image.
