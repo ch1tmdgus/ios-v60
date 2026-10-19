@@ -24,3 +24,5 @@ xnu/.DS_Store
 /v60.zip
 /v60-touch-log*.txt
 /v60-touch*-log.txt
+
+/logs/

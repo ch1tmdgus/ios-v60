@@ -1,27 +1,34 @@
-# touch1 진단 로그 받기
+# V60 영구 로그 수집
 
-제공한 사진에는 프로세스 실행 로그가 보이지만 `V60 TOUCH:` 초기화 결과는
-보이지 않습니다. 이 사진만으로 GENI/전원/칩 응답/HID 중 실패 지점을
-판정할 수 없습니다. 새로운 레지스터 변경 전에 전체 로그를 확인합니다.
-
-touch1은 `sweetusb=0`을 유지하므로 XNU 상태에서 adb가 연결되지 않는 것은
-예상되는 상태입니다. 이 스크립트는 **adb root가 가능한 기존 V60용 recovery**에서
-이미 저장된 XNU 로그를 읽는 용도입니다. recovery 이미지는 제공하지 않습니다.
-
-1. touch1을 실행했던 뒤, 기존에 사용하는 V60용 recovery로 임시 부팅합니다.
-2. 호스트에서 `adb shell id`로 uid=0인지 확인합니다.
-3. 다운로드한 스크립트가 있는 폴더에서 실행합니다:
+최신 문제 진단은 `v60-xnu-touch5-inspect.img`로 합니다. GUI 표시 후에는
+화면 로그를 숨기지만 Preferences IOKit trace와 프로세스 stack은 영구 로그에 남습니다.
 
 ```sh
-python3 v60-pull-touch-log.py --out v60-touch-log.txt
+fastboot boot v60-xnu-touch5-inspect.img
 ```
 
-4. 생성된 `v60-touch-log.txt`를 전달해 주세요. `V60 TOUCH:` 줄은 터미널에도 출력됩니다.
+부팅 후60초 이상 기다려 터치를 확인하고 버튼/스크롤을 시험합니다.
+설정 → 일반 → 정보를 눌러 멈춘 상태를 약2분 유지한 뒤 기존 adb-root recovery로
+돌아옵니다. inspect sampler는 약90초 뒤 첫 회, 이후120초 간격입니다.
 
-스크립트는 userdata 끝 1025개 4KiB 블록에 있는 기존 로그 링을 읽기만 합니다.
-파티션 포맷/쓰기/플래시 및 iOS root 수정은 하지 않습니다.
-헤더가 없거나 읽기에 실패하면 출력 오류를 전달해 주세요.
+저장소에서 실행:
 
-root recovery를 사용할 수 없으면 touch1-diag 부팅을 처음부터 영상으로 찍는
-방법이 있습니다. 터치 worker는 커널 시작 후 약 60초 뒤에 동작하므로,
-`V60 TOUCH:`가 처음 나타나는 구간부터 마지막 줄까지 필요합니다.
+```sh
+python3 v60-touch/pull_log.py --out v60-touch5-log.txt
+```
+
+Release bundle에서 실행:
+
+```sh
+python3 v60-pull-touch-log.py --out v60-touch5-log.txt
+```
+
+도구는 userdata 크기를 읽고 마지막1025개의4KiB 블록에서 기존 SWEETLOG v1
+헤더/4MiB 링을 검증합니다. 파티션을 쓰거나 mount/format/flash하지 않습니다.
+기존 recovery와 adb root가 필요하며 XNU 실행 중 `sweetusb=0`에서는 adb를 기대하지 않습니다.
+
+터치/버튼/Preferences sample 일부는 터미널에 요약되고, 분석용 전체 내용은 지정한
+텍스트 파일에 있습니다. 요약에 원인이 안 보여도 전체 파일을 확인해야 합니다.
+터치가 동작한 touch4에도 같은 추출기를 사용할 수 있습니다.
+
+로그와 기기 덤프는 소스 Git/Release에 포함하지 않습니다.

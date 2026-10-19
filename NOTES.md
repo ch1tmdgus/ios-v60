@@ -10,6 +10,17 @@
 - Public distribution: source/docs in Git; generated experimental images and
   version bundles in prerelease v60-bringup-20261019 with SHA256SUMS. Raw dumps,
   personal logs, Apple userland and private calibration/identity data excluded.
+- PUBLICATION COMPLETE: main source merge d4461794e01f4283f470af58fa0f8d1b95d05ecd,
+  original base7130b4c and local touch history62fb34c retained as merge parents.
+  Public prerelease: https://github.com/ch1tmdgus/ios-v60/releases/tag/v60-bringup-20261019
+  Release ID417416521,16 assets,~160MiB. All GitHub asset digests matched local
+  SHA256; unauthenticated SHA256SUMS and touch5-inspect downloads verified.
+- GitHub Actions host checks SUCCESS run39272378956:
+  https://github.com/ch1tmdgus/ios-v60/actions/runs/39272378956
+  Local merged source reproduced all four original touch5 image/manifest hashes;
+  merged gic-write shim build and host/QEMU suite passed. No new device tests.
+- Development checkout for this public repo is the workspace work/ios-v60-publish;
+  old work/ios-sweet origin still points to upstream and must not receive V60 pushes.
 - NEXT device work: touch5-inspect hardware test and full log, as detailed below.
 
 # V60 local handoff — 2026-10-19
