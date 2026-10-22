@@ -21,8 +21,8 @@ Wi-Fi connectivity and Bluetooth pairing are not implemented.
 The new HackiOS kernel reached APFS and PID 1 on the V60 in user photos, then
 PID 1 died with SIGBUS. [boot2](docs/v60/HACKIOS-BOOT2.md) fixes the diagnostic
 entry stack alignment and timed-wait syscall, with repeated heartbeat checks in QEMU.
-Physical-device confirmation of boot2 is pending. New-base iOS GUI, input, GPU and
-Wi-Fi are not enabled. See the [migration assessment](docs/v60/HACKIOS.md).
+A V60 photo now confirms 11 boot2 wait heartbeats (about 55 seconds) without a
+visible panic. New-base iOS GUI, input, GPU and Wi-Fi are not enabled. See the [migration assessment](docs/v60/HACKIOS.md).
 
 ## Downloads
 

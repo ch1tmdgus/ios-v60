@@ -1,3 +1,21 @@
+# boot2 V60 timed-wait hardware PASS — 2026-10-23
+
+- User IMG_2231 shows APFS V60Bringup, PID1 PASS, boot2 aligned-entry banner
+  and11 WAIT PASS heartbeats (5 one-second timeouts each): approximately55s
+  of sustained diagnostic PID1. No init-exited/panic/MACH Reboot/usertrap is
+  visible in this photo. This passes the requested >=30s observation, NOT
+  an indefinite stability proof. CPU log explicitly says1 processor running;
+  memory sampler reports1186MB available. Do not infer8 cores or full8GB RAM.
+- Tested image is boot2 SHA39241376740ac9d8c9bb25cb3e654221ca2bf2c1db2aed5952a3c688545c94b4.
+  Boot1 SIGBUS is no longer observed in this run; exact prior exception PC
+  remains unproven. No new kernel or image was built for this photo response.
+- New XNU shim/GIC/timer/display/APFS/user execution/timed-wait baseline now
+  has V60 hardware evidence. No iOS16.5 GUI, touch/buttons on the new kernel,
+  A650 GPU or QCA6390 Wi-Fi support yet. Old touch5 GUI remains separate.
+- NEXT: source integration of SW42902/buttons and matched iOS16.5 userland;
+  establish verified RAM/UFS route for its larger root. Do not turn on
+  Redwood-specific power/GPU/Wi-Fi defaults or claim GUI/driver support.
+
 # boot1 V60 PID1 reached, SIGBUS; boot2 wait fix — 2026-10-23
 
 - User photos IMG_2225/2226 prove NEW XNU8796.121.2 on V60 reaches GIC/timer,

@@ -17,7 +17,8 @@ LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
 새 HackiOS 커널이 **V60 실기기에서 APFS/PID1까지 도달**한 것을 사진으로 확인했습니다.
 직후 PID1이 SIGBUS로 종료돼, 진단 코드의 초기 스택 정렬과 대기 호출을 고친
 [boot2](docs/v60/HACKIOS-BOOT2.md)를 만들었습니다. QEMU에서 반복 heartbeat를 확인했고,
-수정판 실기기 확인은 남아 있습니다. 새 기반의 iOS GUI·입력·GPU·Wi-Fi는 아직 켜지 않습니다.
+실기기에서도 WAIT PASS 11회(약55초)와 관찰 구간 내 패닉 없는 실행을 확인했습니다.
+새 기반의 iOS GUI·입력·GPU·Wi-Fi는 아직 켜지 않습니다.
 
 ## 다운로드
 
