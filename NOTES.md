@@ -1,3 +1,33 @@
+# HackiOS source feasibility review — 2026-10-22
+
+- User supplied new oosexgang hackios-xnu-{kernel,userland} and asked whether it
+  can be adapted to V60. Inspected pinned kernel8e61187098f2c26c5daee8f9f72b6416aa64b9ab
+  and userland906425b75e02b4f99eb5d7bb1ef7c9583472d772 in private reference
+  checkouts work/hackios-xnu-kernel-reference / hackios-xnu-userland-reference.
+  No upstream build/setup scripts, flashes or boot tests executed. ADB0 devices.
+- Technically promising new full-source base (XNU8796.121.2+iOS16.5), rather
+  than extending fixed-address baseline8796.141.3. Existing V60 binaries cannot
+  be mixed into new kernel. New source contains GPU/Mesa/EAGL + LinuxKPI Wi-Fi
+  and iOS glue, but hardware code is redwood/SM7325-specific.
+- GPU differences verified in code: redwoodA642L ID06030500, GMU3d69000,
+  GMEM512KiB/bank14; Rofik konaA650 ID06050000, GMU3d6a000, GMEM1152KiB/bank16,
+  a650 firmware. Need V60 power/GMU/SMMU/init/ioctl variants, not name replacement.
+- Wi-Fi bus source explicitly WCN6750 and ATH11K_BUS_AHB; build CONFIG_ATH11K_AHB,
+  no completed QCA6390 PCIe/MHI port inferred from pcic/MSI references. Reuse
+  LinuxKPI/ath11k/network layers, implement RC0/PCIe/MHI/DMA/MSI integration.
+- Upstream README explicitly lists Bluetooth/cellular/charging/Metal app gaps.
+  Userland has real Metal implementation work but completeness not proven.
+  Do not repeat user's "everything perfect" as verified device support.
+- Existing V60 SW42902 and buttons can feed normalized redwood_touch_post ABI;
+  old HID symbol addresses/crop constants are not reusable binary interfaces.
+  UEFI/loader route and V60 memory/GOP still require verification.
+- Added docs/v60/HACKIOS.md and hackios-port/v60-assessment.json with source
+  evidence, reuse map, hardware deltas and gated milestones. JSON NOT runnable;
+  boot_gate.ready=false. No new V60 boot image or new hardware support claimed.
+- Current recommended next milestone: matched new source V60 boot+GUI with GPU/
+  Wi-Fi disabled, then V60 touch/buttons, A650 and QCA6390. Prior wireless3 image
+  remains untested; no external HCI success supplied. Preserve working old images.
+
 # Repository housekeeping — 2026-10-20
 
 - Added `AGENTS.md` to `.gitignore` (72d6516) and removed the tracked root

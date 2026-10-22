@@ -18,6 +18,10 @@ transmission and reception are complete.
 the external Bluetooth chip's version. On-device results are still pending.
 Wi-Fi connectivity and Bluetooth pairing are not implemented.
 
+A [V60 migration assessment for the newly published HackiOS sources](docs/v60/HACKIOS.md)
+is available. GPU and Wi-Fi infrastructure can be reused, while V60 hardware adaptation
+and a matched new build remain unverified.
+
 ## Downloads
 
 [Experimental builds and checksums — Releases](https://github.com/ch1tmdgus/ios-v60/releases/tag/v60-bringup-20261019)

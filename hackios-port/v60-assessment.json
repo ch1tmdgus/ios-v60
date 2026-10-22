@@ -1,0 +1,87 @@
+{
+  "format": "v60-hackios-port-assessment-v1",
+  "assessed_on": "2026-10-22",
+  "status": "source-reviewed-not-bootable",
+  "upstream": {
+    "kernel": {
+      "url": "https://github.com/oosexgang/hackios-xnu-kernel",
+      "commit": "8e61187098f2c26c5daee8f9f72b6416aa64b9ab",
+      "xnu": "8796.121.2",
+      "ios": "16.5"
+    },
+    "userland": {
+      "url": "https://github.com/oosexgang/hackios-xnu-userland",
+      "commit": "906425b75e02b4f99eb5d7bb1ef7c9583472d772"
+    },
+    "device": "redwood",
+    "soc": "SM7325",
+    "gpu": "Adreno 642L",
+    "wifi": "WCN6750",
+    "wifi_bus": "AHB/WPSS"
+  },
+  "target": {
+    "device": "timelm",
+    "model": "LG V60",
+    "soc": "SM8250",
+    "reference_android_kernel_commit": "7eab1a7189a7aba0a0c4a30ba616619e097ced52",
+    "gpu": {
+      "model": "Adreno 650",
+      "chip_id": "0x06050000",
+      "gpu_reg": "0x03d00000",
+      "gmu_reg": "0x03d6a000",
+      "gmem_bytes": 1179648,
+      "highest_bank_bit": 16,
+      "firmware_candidates": [
+        "a650_gmu.bin",
+        "a650_sqe.fw",
+        "a650_zap.mdt"
+      ],
+      "evidence": "Rofik kona-gpu.dtsi and adreno_gpu_core_a650; actual revision/firmware still need confirmation"
+    },
+    "wifi": {
+      "model": "QCA6390",
+      "bus": "PCIe/MHI",
+      "pcie_rc": 0,
+      "observed_recovery_pci_id": "17cb:1101",
+      "firmware_acquired": true,
+      "boot_on_new_base_verified": false
+    },
+    "touch": {
+      "controller": "SW42902",
+      "transport": "GPIO I2C",
+      "address": "0x28",
+      "sda": 36,
+      "scl": 37,
+      "reset": 38,
+      "irq": 39,
+      "hardware_verified_on_existing_base": true,
+      "new_event_sink": "redwood_touch_post"
+    },
+    "buttons": {
+      "hardware_verified_on_existing_base": true,
+      "new_event_sink": "redwood_touch_post with REDWOOD_BUTTON_*"
+    },
+    "bluetooth": {
+      "controller": "QCA6390/Hastings",
+      "uart": "GENI SE6",
+      "registers": "0x00998000",
+      "internal_loopback_verified_on_existing_base": true,
+      "external_hci_verified": false
+    }
+  },
+  "boot_gate": {
+    "ready": false,
+    "uefi_or_loader_adaptation_verified": false,
+    "matched_kernel_and_userland_built": false,
+    "v60_gpu_initialized": false,
+    "qca6390_pcie_mhi_ported": false
+  },
+  "next_milestones": [
+    "Select V60 UEFI/loader route and validate RAM/GOP/GIC without redwood address defaults",
+    "Build matched XNU 8796.121.2 + iOS16.5 userland with GPU/Wi-Fi disabled",
+    "Adapt SW42902 and buttons to normalized redwood_touch_post events",
+    "Port Adreno650 GMU/SMMU/power/firmware and RedwoodGPU ioctl parameter values",
+    "Port QCA6390 PCIe/MHI path underneath reusable LinuxKPI/ath11k/network glue"
+  ],
+  "private_inputs": "Do not commit firmware, raw DT dumps, identity, credentials or Apple userland."
+}
