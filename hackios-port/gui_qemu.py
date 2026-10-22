@@ -7,6 +7,7 @@ files remain private. This validates software only, not V60 hardware drivers.
 import argparse
 import importlib.util
 import json
+import re
 from pathlib import Path
 import struct
 import subprocess
@@ -22,6 +23,8 @@ def main():
     ap.add_argument('--root', required=True, type=Path)
     ap.add_argument('--out', required=True, type=Path)
     ap.add_argument('--seconds', type=int, default=180)
+    ap.add_argument('--bootarg', action='append', default=[], help='extra single-token software diagnostic boot argument')
+    ap.add_argument('--cpus', type=int, choices=(1, 4), default=1)
     a = ap.parse_args()
     out = a.out.resolve()
     if out.exists() or len(str(out / 'mon.sock')) > 100:
@@ -43,7 +46,7 @@ def main():
     system_pa = end
     small_pa = build.ALIGN(system_pa + a.system.stat().st_size)
     adt_pa = build.ALIGN(small_pa + a.root.stat().st_size)
-    tree, _ = build.adt.parse(build.device_tree(system_pa, a.system.stat().st_size, True))
+    tree, _ = build.adt.parse(build.device_tree(system_pa, a.system.stat().st_size, True, a.cpus))
     chosen = next(c for c in tree.children if c.name == 'chosen')
     mm = next(c for c in chosen.children if c.name == 'memory-map')
     mm.props.append(('RAMDisk1', 0, build.U64(small_pa, a.root.stat().st_size)))
@@ -51,9 +54,15 @@ def main():
     ba_pa = build.ALIGN(adt_pa + len(dt))
     top = ba_pa + build.PAGE
     assert top + (1 << 30) < build.PHYS + build.MEM
-    cmd = ('-v debug=0x100 keepsyms=1 cpus=1 rd=md0 serial=3 gpu=0 wifi=0 '
+    cmd = (f'-v debug=0x100 keepsyms=1 cpus={a.cpus} rd=md0 serial=3 gpu=0 wifi=0 '
            'touchscreen=0 buttons=0 cpufreq=0 battery=0 adsp=0 cam=0 haptic=0 '
            'torch=0 ufs_write=0 v60=0 epoch=' + str(int(time.time())))
+    for arg in a.bootarg:
+        if not arg or any(c.isspace() or c == '\0' for c in arg):
+            ap.error('--bootarg must be a single token')
+        cmd += ' ' + arg
+    if len(cmd.encode()) >= 608:
+        ap.error('boot arguments exceed shim ABI limit')
     ba = struct.pack('<HH4x4Q6QI4xQI', 2, 2, build.VIRT, build.PHYS, build.MEM, top,
                      0x9c000000, 0, 4320, 1080, 2460, 32, 0, adt_pa - delta, len(dt))
     ba += cmd.encode().ljust(608, b'\0') + bytes(4) + struct.pack('<2Q', 0, build.MEM)
@@ -63,7 +72,7 @@ def main():
     spec.loader.exec_module(q)
     q.FB_H = 2460
     args = ['qemu-system-aarch64', '-M', 'virt,gic-version=3', '-cpu', 'cortex-a76',
-            '-smp', '1', '-m', '9G', '-nographic', '-serial', f'file:{out}/serial.txt',
+            '-smp', str(a.cpus), '-m', '9G', '-nographic', '-serial', f'file:{out}/serial.txt',
             '-qmp', f'unix:{out}/mon.sock,server,nowait', '-no-reboot']
 
     def load(path, pa):
@@ -124,8 +133,9 @@ def main():
             time.sleep(.2)
         if p.poll() is not None:
             raise RuntimeError(f'QEMU exited: {p.returncode}; inspect serial.txt')
-        q.qmp(str(out / 'mon.sock'), 'stop', pmemsave=(symbol(k, b'_loader_log') + delta,
+        _, registers = q.qmp(str(out / 'mon.sock'), 'stop', 'info registers', pmemsave=(symbol(k, b'_loader_log') + delta,
               1536 * 1024, str(out / 'kernel-console.bin')))
+        (out / 'regs.txt').write_text(registers)
         q.qmp(str(out / 'mon.sock'), pmemsave=(q.FB_BASE, 4320 * 2460, str(out / 'fb.raw')))
     finally:
         if p.poll() is None:
@@ -133,12 +143,21 @@ def main():
         p.wait()
         for part in parts:
             part.unlink(missing_ok=True)
-    log = (out / 'kernel-console.bin').read_bytes().split(b'\0')[0].decode(errors='replace')
+    # OS log strings can themselves contain NUL bytes. Only trim unused tail
+    # space, otherwise a valid startup log is silently cut at its first one.
+    log = (out / 'kernel-console.bin').read_bytes().rstrip(b'\0').decode(errors='replace')
     (out / 'kernel-console.txt').write_text(log)
     q.write_png(str(out / 'fb.png'), (out / 'fb.raw').read_bytes())
     (out / 'fb.raw').unlink()
     if 'panic(cpu ' in log or 'pid 1 exited' in log:
         raise SystemExit('FAIL: kernel panic/init exit; inspect kernel-console.txt')
+    startup = re.search(r'=== (\d+) checks, 0 failed ===', log)
+    result = dict(metadata, startup_checks_passed=bool(startup),
+                  startup_checks=int(startup[1]) if startup else 0,
+                  gui_confirmed=False)
+    (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    if not startup:
+        raise SystemExit('INCOMPLETE: startup checks not observed; inspect console and registers')
     print('Captured GUI software test; inspect console and screenshot:', out)
 
 

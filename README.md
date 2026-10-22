@@ -24,8 +24,10 @@ entry stack alignment and timed-wait syscall, with repeated heartbeat checks in 
 A V60 photo now confirms 11 boot2 wait heartbeats (about 55 seconds) without a
 visible panic. A [new-base GUI1 candidate](docs/v60/HACKIOS-GUI1.md) now builds
 the V60 touch/button adapter and XNU from source, with a separate matched
-iOS 16.5 system image. Physical GUI/input verification is pending; GPU and
-Wi-Fi remain disabled. See the [migration assessment](docs/v60/HACKIOS.md).
+iOS 16.5 system image. On 2026-10-23 the user confirmed the V60 reached the
+home screen after an extended Apple-logo wait and that touch works, with very
+slow response. It currently uses one CPU and software rendering; GPU and Wi-Fi
+remain disabled. See the [migration assessment](docs/v60/HACKIOS.md).
 
 ## Downloads
 

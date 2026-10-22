@@ -1,7 +1,9 @@
 # HackiOS V60 GUI1 candidate — 2026-10-23
 
-This is a new-base candidate, not a confirmed V60 GUI release. Keep the working
-touch5 image and existing root. No GPU acceleration or wireless support is claimed.
+On 2026-10-23 the user confirmed the V60 eventually reached the home screen
+and touch responds, but very slowly. Exact startup time and frame rate were
+not measured. Keep GUI1, touch5 and the existing root. GPU acceleration and
+wireless support are not implemented.
 
 ## Sources and build
 
@@ -63,6 +65,25 @@ preserved DTB and segment layout. The shim compiles locally; native XNU links
 in CI. QEMU does not validate V60 GPIO/SPMI/UFS, reservations or panel handoff.
 Initial GUI runs reached SpringBoard/backboardd but showed the Apple logo;
 check the latest local screenshot/log before claiming GUI completion.
+
+The subsequent physical user report supersedes that initial observation:
+GUI1 did reach home and touch works. The longer local startup trace shows
+SpringBoard synchronously waiting through CoreServices/Foundation/XPC while
+lsd registers apps and extensions, with repeated multi-second delays. This
+is evidence of work progressing, not proof of an indefinite deadlock.
+
+## perf1 comparison image
+
+The private `v60-hackios-perf1-1cpu.img` uses the same working kernel, input
+code and installed system, with `fb_hz=30 fb_filter=0 fb_threads=1 fb_queue=1`.
+It targets 30Hz, replaces bilinear scaling with nearest neighbour and limits
+queued frames. Text edges can be rougher. It does not claim measured 30fps,
+GPU acceleration, a startup-time fix or confirmed physical speedup. QEMU
+passed the 36 init and 80 surface checks without an observed kernel panic.
+
+A separate four-core software experiment failed before console startup;
+device-image builds are restricted to one core until that is resolved.
+The diagnostic `sb_watch.c` and GUI2-diag image were not sent to the phone.
 
 After an explicitly authorized and verified sidecar installation, test with
 temporary `fastboot boot` of the local GUI1 image. Keep the working boot image.

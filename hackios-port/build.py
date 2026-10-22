@@ -57,7 +57,8 @@ def nvram():
     return bytes(b)
 
 
-def device_tree(rd_pa, rd_size, qemu=False):
+def device_tree(rd_pa, rd_size, qemu=False, cpus=1):
+    assert cpus in (1, 4)
     io = 0x08000000 if qemu else 0x00400000
     gd, gr = (0x08000000, 0x080a0000) if qemu else (0x17a00000, 0x17a60000)
     freq = 62500000 if qemu else 19200000
@@ -70,12 +71,12 @@ def device_tree(rd_pa, rd_size, qemu=False):
         ('nvram-bank-size', U32(0x2000)), ('nvram-bank-count', U32(1)),
         ('nvram-current-bank', U32(0)), ('nvram-proxy-data', nvram()),
     ], [node('memory-map', [('RAMDisk', U64(rd_pa, rd_size))])])
-    cpu = node('cpu0', [
-        ('device_type', CSTR('cpu')), ('state', CSTR('running')), ('reg', U32(0)),
-        ('cpu-id', U32(0)), ('timebase-frequency', U64(freq)), ('fixed-frequency', U64(freq)),
+    cpu_nodes = [node('cpu%d' % i, [
+        ('device_type', CSTR('cpu')), ('state', CSTR('running')), ('reg', U32(i if qemu else i << 8)),
+        ('cpu-id', U32(i)), ('timebase-frequency', U64(freq)), ('fixed-frequency', U64(freq)),
         ('clock-frequency', U64(1804800000)), ('bus-frequency', U64(100000000)),
         ('memory-frequency', U64(1866000000)), ('peripheral-frequency', U64(freq)),
-    ])
+    ]) for i in range(cpus)]
     children = [node('gic', [
         ('device_type', CSTR('interrupt-controller')), ('compatible', CSTR('arm,gic-v3')),
         ('reg', U64(gd - io, 0x10000, gr - io, 0x100000)),
@@ -87,12 +88,12 @@ def device_tree(rd_pa, rd_size, qemu=False):
     return adt.serialize(node('device-tree', [
         ('model', CSTR('LG-V60-HackiOS-bringup')), ('compatible', CSTR('lge,timelm') + CSTR('AppleARM')),
         ('#address-cells', U32(2)), ('#size-cells', U32(2)),
-    ], [chosen, node('defaults'), node('options'), node('cpus', children=[cpu]),
+    ], [chosen, node('defaults'), node('options'), node('cpus', children=cpu_nodes),
         node('arm-io', [('device_type', CSTR('v60-io')), ('ranges', U64(0, io, 0x40000000 - io)),
             ('#address-cells', U32(2)), ('#size-cells', U32(2))], children)]))
 
 
-def payload(kernel, root, qemu):
+def payload(kernel, root, qemu, cpus=1):
     m = mkpayload.parse_macho(kernel)
     assert (m['cputype'], m['cpusub'], m['fixups']) == (0x100000c, 0, None)
     segs = [s for s in m['segs'] if s['vmsize']]
@@ -107,7 +108,7 @@ def payload(kernel, root, qemu):
     struct.pack_into('<3Q', kernel, slot + 8, 0, 0, delta)
     end = ALIGN(max(s['vmaddr'] + s['vmsize'] for s in segs))
     rd_va, rd_size = end, ALIGN(len(root))
-    tree = device_tree(rd_va - VIRT + PHYS, len(root), qemu)
+    tree = device_tree(rd_va - VIRT + PHYS, len(root), qemu, cpus)
     end += rd_size
     assert end - VIRT + ALIGN(len(tree)) + PAGE + 0x4000000 < MEM
     pieces = []

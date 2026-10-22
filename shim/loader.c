@@ -177,7 +177,11 @@ const char *loader_boot(uintptr_t dtb)
 	ba->memSize = p->mem_size;
 	ba->topOfKernelData = top;
 	ba->Video.v_baseAddr = FB_BASE;
+#ifdef V60_TEXT_CONSOLE
+    ba->Video.v_display = 0;
+#else
 	ba->Video.v_display = 1;
+#endif
 	ba->Video.v_rowBytes = FB_STRIDE;
 	ba->Video.v_width = FB_W;
 	ba->Video.v_height = FB_H;

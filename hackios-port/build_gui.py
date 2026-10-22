@@ -19,11 +19,17 @@ from recovery_system import digest
 
 
 def main():
+    if not __debug__:
+        raise SystemExit('Do not run the guarded image builder with python -O')
     ap = argparse.ArgumentParser(description=__doc__)
     for name in ('baseline', 'kernel', 'root', 'plan', 'out'):
         ap.add_argument('--' + name, required=True, type=Path)
     ap.add_argument('--source-revision', required=True)
     ap.add_argument('--run-id', required=True)
+    ap.add_argument('--diagnostic', action='store_true', help='text console and syscall tracing; no GPU or wireless changes')
+    ap.add_argument('--cpus', type=int, choices=(1,), default=1,
+                    help='device images remain single-core until the separate SMP experiment passes')
+    ap.add_argument('--balanced', action='store_true', help='30Hz target, nearest-neighbour scaling and one queued frame')
     a = ap.parse_args()
     if len(a.source_revision) != 40 or any(c not in '0123456789abcdef' for c in a.source_revision):
         ap.error('provide the full source build Git revision')
@@ -39,7 +45,7 @@ def main():
     for s in (b'_v60_input_init', b'_v60_keys_init', b'_redwood_touch_post'):
         symbol(kernel, s)  # Require the actual native input build, not old prebuilt.
     build.PHYS, build.MEM = 0x100000000, 0x180000000
-    small, info = build.payload(kernel, a.root.read_bytes(), False)
+    small, info = build.payload(kernel, a.root.read_bytes(), False, a.cpus)
     n = struct.unpack_from('<I', small, 12)[0]
     virt, entry, dt_off, dt_len, old_end, phys, memory = struct.unpack_from('<7Q', small, 0x10)
     tree, _ = build.adt.parse(small[dt_off:dt_off+dt_len])
@@ -73,8 +79,12 @@ def main():
     p += dt
     p += bytes(build.ALIGN(len(p), 8) - len(p))
     struct.pack_into('<8sII7Q', p, 0, b'SWEETXNU', 2, len(pieces), virt, entry, dt_off, len(dt), end, phys, memory)
-    cmd = ('debug=0x100 keepsyms=1 cpus=1 rd=md0 v60=1 v60touch=1 v60touchdelay=10 v60keys=1 '
+    cmd = (f'debug=0x100 keepsyms=1 cpus={a.cpus} rd=md0 v60=1 v60touch=1 v60touchdelay=10 v60keys=1 '
            'gpu=0 wifi=0 touchscreen=0 buttons=0 cpufreq=0 battery=0 adsp=0 cam=0 haptic=0 torch=0 ufs_write=0 epoch=' + str(int(time.time())))
+    if a.diagnostic:
+        cmd = '-v systrace=1 ' + cmd
+    if a.balanced:
+        cmd += f' fb_hz=30 fb_filter=0 fb_threads={1 if a.cpus == 1 else 2} fb_queue=1'
     assert len(cmd) < 608
     p[0x48:0x2a8] = cmd.encode().ljust(608, b'\0')
     (out / 'payload.bin').write_bytes(p)
@@ -89,6 +99,8 @@ def main():
             source_hashes[path.name] = build.SHA((work / path.name).read_bytes())
     flags = ['-O2', '-ffreestanding', '-nostdlib', '-fno-pic', '-mgeneral-regs-only',
              '-mstrict-align', '-fno-stack-protector', '-Wall', '-Wextra', '-DV60_EXTERNAL_ROOT']
+    if a.diagnostic:
+        flags.append('-DV60_TEXT_CONSOLE')
     objects = []
     for name in sources:
         obj = Path(name).stem + '.o'
@@ -123,7 +135,9 @@ def main():
     header[576:608] = check.digest() + bytes(12)
     pad = lambda data: bytes(data) + bytes(build.ALIGN(len(data), ps)-len(data))
     image = bytes(header) + pad(shim) + pad(p) + pad(dtb)
-    target = out / 'v60-hackios-gui1.img'
+    name = 'v60-hackios-perf1-%dcpu%s.img' % (a.cpus, '-diag' if a.diagnostic else '') if a.balanced else (
+        'v60-hackios-gui2-diag.img' if a.diagnostic else 'v60-hackios-gui1.img')
+    target = out / name
     target.write_bytes(image)
     info.update(stage='GUI candidate; hardware untested', device_tested=False, payload_version=2,
                 cmdline=cmd, kernel_sha256=build.SHA(kernel), source_revision=a.source_revision,
@@ -132,6 +146,8 @@ def main():
                 root_apfs_sha256=build.SHA(a.root.read_bytes()),
                 userland_commit=build.USERLAND_COMMIT,
                 ramdisk_pa=hex(system_pa), small_ramdisk_pa=hex(small_pa),
+                diagnostic=a.diagnostic, shim_cflags=flags,
+                requested_cpus=a.cpus, balanced_profile=a.balanced,
                 image_sha256=build.SHA(image), image_size=len(image), image=target.name)
     (out / 'manifest.json').write_text(json.dumps(info, indent=2) + '\n')
     print(target)

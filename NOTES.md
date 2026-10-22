@@ -1,3 +1,30 @@
+# New-base HOME + TOUCH user confirmation; performance work — 2026-10-23
+
+- User reports GUI1 eventually left the Apple logo, reached HOME and touch works,
+  but response is extremely slow. This is user-reported physical success, not a
+  measured frame rate or proof of every driver. Exact first-boot duration unknown.
+  Preserve GUI1 SHA1d7ba4131852af99ac42d28248ab4526c503b8ee7f333f33f4f5392e5c50f21e
+  and the installed sidecar. No further phone changes made during this response.
+- Cancelled the pending recovery/GUI2 diagnostic request after the home report;
+  user was told to keep the current screen. GUI2-diag was built but NOT booted.
+- New local sampling shows SpringBoard waiting synchronously through CoreServices,
+  Foundation/libxpc while lsd gathers app/extension containers. Roughly5s delays
+  occur repeatedly; this shows progress, not a proven permanent deadlock. The
+  global dispatch timer runs; main-queue callbacks wait behind main-thread startup.
+  No activation service or trust-policy changes were made.
+- sb_watch.c is a diagnostic-only in-process sampler; never deployed to V60 yet.
+  A private Settings-only enumeration overlay was tried in QEMU, did not establish
+  GUI success, and is NOT in the performance image or published default userland.
+- perf1 single-core: fb_hz=30 target, fb_filter=0 nearest neighbour, fb_threads=1,
+  fb_queue=1. Same working kernel/input and installed system. This reduces scaling
+  work and queued frames; text edges may be rougher. No measured speedup yet.
+  QEMU75s: init36checks/0failed, surface80checks/0failed, no observed kernel panic.
+- Four-core experiment hit an early EL1 data abort before console startup in QEMU.
+  Saved /tmp/v60-smp-isolate/regs.txt; PC ExceptionVectorsBase+512, LR
+  fleh_synchronous_sp1+28, interrupted code current_percpu_base+12. Empty loader
+  log. Four-core device build is BLOCKED in builder choices, no device image sent.
+  CPU IDs from live DT are0,100,200,...700. Do not enable extra cores just by flags.
+
 # Native-source GUI1 candidate and read-only recovery work — 2026-10-23
 
 - UPDATE: user explicitly approved separate-system installation. Wrote only the
