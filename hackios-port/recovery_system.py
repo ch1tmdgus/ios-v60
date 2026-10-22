@@ -93,8 +93,11 @@ def main():
     ap.add_argument('--plan', type=Path, required=True)
     ap.add_argument('--serial')
     ap.add_argument('--backup', action='store_true', help='read-only backup of the proposed sidecar extent')
+    ap.add_argument('--verify', action='store_true', help='read-only full verification against an existing plan')
     ap.add_argument('--install', action='store_true', help='explicit persistent sidecar write; requires existing matching plan')
     a = ap.parse_args()
+    if sum((a.backup, a.verify, a.install)) > 1:
+        ap.error('choose only one of --backup, --verify or --install')
     with a.image.open('rb') as src:
         first = src.read(BLOCK)
     size = a.image.stat().st_size
@@ -130,7 +133,7 @@ def main():
         backup_record.write_text(json.dumps(dict(plan=plan, backup_sha256=saved.hexdigest()), indent=2) + '\n')
         print('Read-only extent backup completed:', backup_path)
         return
-    if not a.install:
+    if not a.install and not a.verify:
         if a.plan.exists():
             ap.error('choose a fresh plan path; previous reviewed plans are preserved')
         a.plan.write_text(json.dumps(plan, indent=2) + '\n')
@@ -143,9 +146,10 @@ def main():
     backup_info = json.loads(backup_record.read_text())
     if backup_info['plan'] != plan or backup_path.stat().st_size != size or digest(backup_path)[0] != backup_info['backup_sha256']:
         ap.error('extent backup differs from reviewed plan; no write performed')
-    with a.image.open('rb') as src:
-        subprocess.run(adb + [f'dd of={PART} bs=1048576 seek={RELATIVE // (1 << 20)} conv=notrunc,fsync'],
-                       stdin=src, check=True)
+    if a.install:
+        with a.image.open('rb') as src:
+            subprocess.run(adb + [f'dd of={PART} bs=1048576 seek={RELATIVE // (1 << 20)} conv=notrunc,fsync'],
+                           stdin=src, check=True)
     # Read back the exact extent, streaming locally so the recovery needs no
     # hash utility and no temporary copy. Check old volume metadata as well.
     proc = subprocess.Popen(adb + [f'dd if={PART} bs={BLOCK} skip={RELATIVE // BLOCK} count={size // BLOCK} 2>/dev/null'],
@@ -154,8 +158,12 @@ def main():
     while buf := proc.stdout.read(8 << 20):
         verified.update(buf)
         received += len(buf)
-    if proc.wait() or received != size or verified.hexdigest() != sha or geometry(adb) != g:
-        raise SystemExit('Sidecar verification failed; do not boot it. Existing filesystem metadata was checked.')
+    status = proc.wait()
+    unchanged = geometry(adb) == g
+    if status or received != size or verified.hexdigest() != sha or not unchanged:
+        raise SystemExit(f'Sidecar verification failed; do not boot it. Read status={status}, '
+                         f'bytes={received}/{size}, hash_match={verified.hexdigest() == sha}, '
+                         f'filesystem_metadata_unchanged={unchanged}')
     receipt = a.plan.with_suffix('.installed.json')
     receipt.write_text(json.dumps(dict(plan, read_only_plan=False, readback_verified=True), indent=2) + '\n')
     print('Exact readback SHA256 passed; GPT and both existing HFS headers unchanged:', receipt)

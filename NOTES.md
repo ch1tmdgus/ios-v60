@@ -1,5 +1,17 @@
 # Native-source GUI1 candidate and read-only recovery work — 2026-10-23
 
+- UPDATE: user explicitly approved separate-system installation. Wrote only the
+  2,492,203,008-byte sidecar at userdata+18GiB, after verified private extent backup.
+  First verification failed (cause undetermined); a separate full read returned
+  exactly the expected bytes and SHA8d27af4e95bb4dcb887d4034058b63fc298fc7125222b4599e3509a46c53cc0f.
+  GPT and primary/backup HFS headers remained unchanged; installed receipt saved.
+  Rebooted recovery to bootloader and fastboot boot returned Sending OKAY/Booting
+  OKAY for GUI1 image SHA1d7ba4131852af99ac42d28248ab4526c503b8ee7f333f33f4f5392e5c50f21e.
+  No boot partition flash. Physical screen/result UNKNOWN until user photo.
+  Final QEMU180s: init36checks/0failed, surf80checks/0failed, no kernel panic;
+  screenshot still Apple logo. Do NOT claim physical or software GUI completion.
+  Local user bundle: ~/Downloads/v60-hackios-gui1-test, private Apple content.
+
 - Source kernel CI39812932999 succeeded at209a4950b72c26dc5a8fa9d396039f7dfde2c920.
   Includes SW42902 GPIO-I2C adapter and SPMI button observer, gated by v60=1.
   New native input is NOT yet hardware-tested. Other board drivers are off.

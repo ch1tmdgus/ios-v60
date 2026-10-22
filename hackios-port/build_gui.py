@@ -131,6 +131,7 @@ def main():
                 system_sha256=sha, system_bytes=image_bytes, system_relative=plan['relative'],
                 root_apfs_sha256=build.SHA(a.root.read_bytes()),
                 userland_commit=build.USERLAND_COMMIT,
+                ramdisk_pa=hex(system_pa), small_ramdisk_pa=hex(small_pa),
                 image_sha256=build.SHA(image), image_size=len(image), image=target.name)
     (out / 'manifest.json').write_text(json.dumps(info, indent=2) + '\n')
     print(target)
