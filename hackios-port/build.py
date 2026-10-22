@@ -65,7 +65,7 @@ def device_tree(rd_pa, rd_size, qemu=False):
         ('dram-base', U64(PHYS)), ('dram-size', U64(MEM)),
         ('random-seed', hashlib.sha512(b'V60 HackiOS first boot diagnostic seed').digest()),
         ('debug-enabled', U32(1)), ('psci-method', CSTR('hvc' if qemu else 'smc')),
-        ('firmware-version', CSTR('v60-hackios-shim1')),
+        ('firmware-version', CSTR('v60-hackios-shim2')),
         ('display-scale', U32(3)), ('display-rotation', U32(0)),
         ('nvram-bank-size', U32(0x2000)), ('nvram-bank-count', U32(1)),
         ('nvram-current-bank', U32(0)), ('nvram-proxy-data', nvram()),
@@ -130,7 +130,7 @@ def payload(kernel, root, qemu):
     b += bytes(ALIGN(len(b), 8) - len(b))  # shim copy64 may read the last full word
     struct.pack_into('<8sII7Q', b, 0, b'SWEETXNU', 1, len(pieces), VIRT, m['entry'],
         dt_off, len(tree), end, PHYS, MEM)
-    cmd = '-v debug=0x100 keepsyms=1 cpus=1 rd=md0 gpu=0 wifi=0 touchscreen=0 buttons=0 cpufreq=0 battery=0 adsp=0 cam=0 haptic=0 torch=0 ufs_write=0'
+    cmd = '-v debug=0x100 keepsyms=1 systrace=1 cpus=1 rd=md0 gpu=0 wifi=0 touchscreen=0 buttons=0 cpufreq=0 battery=0 adsp=0 cam=0 haptic=0 torch=0 ufs_write=0'
     if qemu:
         cmd += ' serial=3'
     assert len(cmd.encode()) < 608
@@ -207,7 +207,7 @@ def main():
         'stage': 'diagnostic PID1; not iOS GUI', 'device_tested': False})
     if not a.qemu:
         image, preserved = repack(a.baseline.read_bytes(), p)
-        path = out / 'v60-hackios-boot1-diag.img'
+        path = out / 'v60-hackios-boot2-diag.img'
         path.write_bytes(image)
         info.update(preserved)
         info.update({'image': path.name, 'image_sha256': SHA(image), 'image_size': len(image)})

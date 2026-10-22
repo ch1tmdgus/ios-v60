@@ -1,3 +1,37 @@
+# boot1 V60 PID1 reached, SIGBUS; boot2 wait fix — 2026-10-23
+
+- User photos IMG_2225/2226 prove NEW XNU8796.121.2 on V60 reaches GIC/timer,
+  CPU0, 1080x2460 display, APFS V60Bringup and own PID1 PASS. Then SIGBUS:
+  namespace2/subcode0xa, initproc failed to start, MACH Reboot. Do NOT mark
+  sustained boot or GUI success. Corefile error2 is a later missing-path error.
+- Found two real bugs in OUR diagnostic init.S: raw Darwin entry SP is8mod16
+  (old QEMU regs16fdffe78), but it did SP-based stores without crt1 alignment;
+  and syscall240 is listxattr, not nanosleep, so old QEMU never actually slept.
+  Exact hardware fault PC/address unknown because systrace was off. SP fault
+  is plausible, not proven. QEMU did NOT reproduce the physical SIGBUS even
+  with SA0 requested in entry stub; must not claim a hardware-equivalent check.
+- Fixed raw entry SP alignment to16 and used BSD syscall93 select with nfds0
+  and aligned user64 timeval {1,0}. Checks carry and retval0. Each five real
+  one-second timeouts prints WAIT PASS; repeats forever. systrace=1 captures
+  future usertrap PC/SP/code. Intermediate semwait_null candidate returned
+  EINVAL in QEMU, rejected; NOT included in final image. Strengthened smoke
+  requires timed heartbeat (and bounded count), rejects init-exited/reboot/
+  usertrap/panic. Old PASS-only test was insufficient.
+- Final outputs/v60-hackios-boot2-diag.img SHA256
+  39241376740ac9d8c9bb25cb3e654221ca2bf2c1db2aed5952a3c688545c94b4,
+  20,840,448 bytes; bundle v60-hackios-boot2-test.zip. Boot2 DEVICE UNTESTED.
+  Same pinned prebuilt kernel/loader-slot patch, same exact shim/DTB as boot1;
+  own APFS PID1, firmware identity and logging args changed. No full source
+  kernel rebuild, no iOS GUI/input/GPU/Wi-Fi enabled. Old working images kept.
+- Actual QEMU framebuffer/no-UART smoke PASS /tmp/v60-boot2-select-smoke:
+  PID1 PASS then2 WAIT PASS markers across15s, no fatal log. QEMU tested root
+  byte-identical to physical-image root; two independent physical builds
+  byte-identical; boot-v2 SHA1 and shim/DTB invariants validated; ZIP CRC PASS.
+- NEXT: user temporary fastboot boot boot2, watch WAIT PASS repeat >=30s and
+  photo last screen. On failure need usertrap/systrace bottom lines. Do not
+  reuse old touch log puller with this new kernel. Continue source/input and
+  matched16.5 GUI integration after stable physical PID1. No flash/repartition.
+
 # HackiOS boot1 diagnostic image — 2026-10-22
 
 - User explicitly requested a bootable V60 image from the new sources, permitting

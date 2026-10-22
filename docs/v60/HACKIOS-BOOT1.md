@@ -1,8 +1,12 @@
 # V60 HackiOS boot1 — 2026-10-22
 
+**2026-10-23 실기기 후속:** APFS/PID1/화면 출력까지 도달했으나 직후 SIGBUS로
+PID1이 종료되고 패닉이 났습니다. 지속 대기는 실패했습니다. [수정판 boot2](HACKIOS-BOOT2.md)를 사용합니다.
+
 새 XNU8796.121.2 기반 **첫 실기기 부팅을 확인하기 위한 진단 이미지**입니다.
 QEMU에서 새 커널 → GICv3/타이머 → APFS RAM 루트 → EL0 PID1 실행과
-1080×2460 텍스트 화면 출력을 확인했습니다. **V60 실기기 부팅은 아직 미검증**입니다.
+1080×2460 텍스트 화면 출력을 확인했습니다. 제작 당시 실기기는 미검증이었으며,
+이후 결과는 위의 2026-10-23 후속 기록을 참고합니다.
 이 이미지에서 iOS 잠금화면·터치·버튼·GPU·Wi-Fi는 실행하지 않습니다.
 기존 touch5 GUI 이미지는 그대로 보관합니다.
 
@@ -41,7 +45,8 @@ V60 HACKIOS: diagnostic root alive; iOS GUI and V60 drivers pending
   19.2MHz와 CPU0 하나만 전달합니다. Redwood의 UEFI·GPIO·전원 기본값을 가져오지 않습니다.
 - `XNULDRST`의 physical/virtual delta를 설정합니다. UEFI return callback은 없으므로 0입니다.
 - 자체 어셈블리 PID1을 빌드해 4MB APFS RAM 루트 `/sbin/launchd`에 넣습니다.
-  getpid가 1인지 검사하고 콘솔에 성공 문구를 쓴 뒤 nanosleep으로 대기합니다.
+  getpid가 1인지 검사하고 콘솔에 성공 문구를 씁니다. 원래 대기 루프에는 syscall 번호
+  오류가 있었습니다. 수정 내용은 boot2 문서에 있습니다.
   iOS16.7 사용자 공간을 새 16.5 커널에 혼합하지 않습니다.
 - GPU/Wi-Fi/Goodix/Redwood 버튼·클럭·전원·UFS 쓰기를 켜지 않습니다.
 

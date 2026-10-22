@@ -58,6 +58,11 @@ def main():
         struct.pack_into('<Q', p, 0x28, len(dt))
         cmd = p[0x48:0x2a8].split(b'\0')[0].replace(b' serial=3', b'')
         p[0x48:0x2a8] = cmd.ljust(608, b'\0')
+    cmd = p[0x48:0x2a8].split(b'\0')[0]
+    if b'systrace=' not in cmd:
+        cmd += b' systrace=1'
+    assert len(cmd) < 608
+    p[0x48:0x2a8] = cmd.ljust(608, b'\0')
     out.mkdir(parents=True)
     image = out / 'payload.bin'
     image.write_bytes(p)
@@ -76,6 +81,14 @@ def main():
         return phys, bytes(ram), ba, entry
 
     qemu.build_image = text_mode
+    original_stub = qemu.stub
+
+    def alignment_checked_stub(ba, entry):
+        # Enable SCTLR_EL1.SA0 before XNU, as on hardware that checks EL0 SP.
+        # mrs x9,sctlr_el1; orr x9,x9,#16; msr sctlr_el1,x9; isb
+        return struct.pack('<4I', 0xd5381009, 0xb27c0129, 0xd5181009, 0xd5033fdf) + original_stub(ba, entry)
+
+    qemu.stub = alignment_checked_stub
     original = qemu.qmp
 
     def capture(sock, *cmds, **kw):
@@ -90,8 +103,13 @@ def main():
     (out / 'kernel-console.txt').write_text(log)
     assert 'V60 HACKIOS: PID1 PASS' in log, 'PID 1 did not execute successfully'
     assert 'panic(cpu ' not in log, 'kernel panic'
+    assert 'pid 1 exited' not in log and 'MACH Reboot' not in log, 'init exited or kernel halted'
+    waits = log.count('V60 HACKIOS: WAIT PASS')
+    assert 1 <= waits <= 4, 'missing timed-wait progress or waits are returning without blocking'
+    assert 'usertrap:' not in log, 'fatal-looking EL0 exception'
     result = {'status': 'PASS', 'pid1': True, 'apfs_root': True,
         'video_geometry': [1080, 2460, 4320], 'uart_disabled': a.framebuffer,
+        'sa0_requested_in_loader': True, 'wait_heartbeats': waits,
         'v60_hardware_tested': False}
     (out / 'smoke-result.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))

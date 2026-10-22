@@ -18,11 +18,11 @@ transmission and reception are complete.
 the external Bluetooth chip's version. On-device results are still pending.
 Wi-Fi connectivity and Bluetooth pairing are not implemented.
 
-A [first HackiOS boot diagnostic for V60](docs/v60/HACKIOS-BOOT1.md) is now built.
-The new XNU 8796.121.2 boots an APFS diagnostic root and executes PID 1 in QEMU.
-The V60 image uses the proven V60 shim (with a guarded text-mode change) and DTB; physical-device testing is pending.
-This is separate from the working older GUI builds: new-base touch, buttons, iOS GUI,
-GPU and Wi-Fi are not enabled. See the [migration assessment](docs/v60/HACKIOS.md).
+The new HackiOS kernel reached APFS and PID 1 on the V60 in user photos, then
+PID 1 died with SIGBUS. [boot2](docs/v60/HACKIOS-BOOT2.md) fixes the diagnostic
+entry stack alignment and timed-wait syscall, with repeated heartbeat checks in QEMU.
+Physical-device confirmation of boot2 is pending. New-base iOS GUI, input, GPU and
+Wi-Fi are not enabled. See the [migration assessment](docs/v60/HACKIOS.md).
 
 ## Downloads
 
