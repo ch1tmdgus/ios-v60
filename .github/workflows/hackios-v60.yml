@@ -1,0 +1,87 @@
+name: hackios-v60-source
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['hackios-port/native/**', 'hackios-port/apply_native.py', '.github/workflows/hackios-v60.yml']
+permissions:
+  contents: read
+concurrency:
+  group: hackios-v60-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      THEOS: /home/runner/theos
+      KERNEL_REV: 8e61187098f2c26c5daee8f9f72b6416aa64b9ab
+      SDK_REV: 0222fd5413cf4b9af096f37b4621afa2688572f7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang lld flex bison m4 autoconf automake libxml2-dev libssl-dev libbsd-dev libncurses-dev python3 perl xz-utils
+          clang --version
+      - name: Fetch pinned HackiOS source
+        run: |
+          git init -q upstream
+          git -C upstream fetch -q --depth 1 https://github.com/oosexgang/hackios-xnu-kernel.git "$KERNEL_REV"
+          git -C upstream checkout -q FETCH_HEAD
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/theos
+          key: hackios-v60-theos-16.5-0222fd5-toolchain-210562a-v1
+      - name: Prepare pinned SDK and cctools
+        run: |
+          mkdir -p "$THEOS/toolchain" "$THEOS/sdks"
+          if [ ! -x "$THEOS/toolchain/linux/iphone/bin/ld" ]; then
+            curl -fL --retry 3 https://github.com/L1ghtmann/llvm-project/releases/download/test-210562a/iOSToolchain-x86_64.tar.xz -o /tmp/ios-toolchain.tar.xz
+            echo 'a72a7a577e2fbe2838b6b5e9c72034fa7d114af96f0e1d4b016f18730ce4056e  /tmp/ios-toolchain.tar.xz' | sha256sum -c -
+            tar -xJf /tmp/ios-toolchain.tar.xz -C "$THEOS/toolchain"
+          fi
+          if [ ! -d "$THEOS/sdks/iPhoneOS16.5.sdk/usr/include" ]; then
+            git init -q sdk-source
+            git -C sdk-source remote add origin https://github.com/theos/sdks.git
+            git -C sdk-source config core.sparseCheckout true
+            echo 'iPhoneOS16.5.sdk/' > sdk-source/.git/info/sparse-checkout
+            git -C sdk-source fetch -q --depth 1 --filter=blob:none origin "$SDK_REV"
+            git -C sdk-source checkout -q FETCH_HEAD
+            mv sdk-source/iPhoneOS16.5.sdk "$THEOS/sdks/"
+          fi
+          "$THEOS/toolchain/linux/iphone/bin/ld" -v
+      - name: Apply V60 source overlay and prepare dependencies
+        run: |
+          upstream/xnu/apply.sh
+          python3 hackios-port/apply_native.py upstream/xnu-src/xnu-8796.121.2
+          upstream/xnu-deps/setup.sh
+      - name: Compile kernel from source
+        run: |
+          set +e
+          upstream/xnu-build.sh -j4 -k 2>&1 | tee kernel-build.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "Upstream make status: $status (known post-link export checks may fail)"
+          K=upstream/xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837
+          test -s "$K/mach.development.bcm2837"
+          mkdir -p kernel-out
+          cp "$K/mach.development.bcm2837" kernel-out/
+          cp "$K/mach.development.bcm2837.unstripped" kernel-out/
+          "$THEOS/toolchain/linux/iphone/bin/nm" -n kernel-out/mach.development.bcm2837.unstripped > kernel-out/symbols.txt
+          grep -q ' _v60_input_init$' kernel-out/symbols.txt
+          grep -q ' _v60_keys_init$' kernel-out/symbols.txt
+          grep -q ' _redwood_touch_post$' kernel-out/symbols.txt
+          sha256sum kernel-out/mach.* > kernel-out/SHA256SUMS.txt
+          printf '%s\n' "$KERNEL_REV" > kernel-out/UPSTREAM_COMMIT
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hackios-v60-source-kernel
+          path: |
+            kernel-out/
+            kernel-build.log
+            upstream/xnu-deps/*build.log
+            upstream/xnu-deps/exporthdrs.log
+          if-no-files-found: warn
+          retention-days: 7
