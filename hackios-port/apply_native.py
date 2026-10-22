@@ -24,6 +24,12 @@ def main():
     old = 'int y=f->y[i]<12?12:(f->y[i]>2447?2447:f->y[i]);'
     assert driver.count(old) == 1
     driver = driver.replace(old, 'int y=f->y[i]; /* native framebuffer scales the whole physical panel */')
+    # The standalone ELF entry section has no role in a native Mach-O build.
+    entry = '__attribute__((section(".text.entry"))) '
+    assert driver.count(entry) == 1
+    driver = driver.replace(entry, '')
+    # Avoid colliding with XNU's scheduler clear_wait(thread, result).
+    driver = driver.replace('clear_wait(', 'v60_clock_clear_wait(')
     (dest / 'v60_touch_impl.inc').write_text(driver)
     for name in ['protocol.h', 'gpio_i2c.h', 'clock_policy.h']:
         shutil.copyfile(HERE.parent / 'v60-touch' / name, dest / name)
