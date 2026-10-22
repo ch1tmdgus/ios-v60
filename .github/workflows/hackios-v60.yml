@@ -22,7 +22,7 @@ jobs:
       - name: Build prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y clang lld flex bison m4 autoconf automake libxml2-dev libssl-dev libbsd-dev libncurses-dev uuid-dev zlib1g-dev python3 perl xz-utils
+          sudo apt-get install -y clang lld llvm-18 flex bison m4 autoconf automake libxml2-dev libssl-dev libbsd-dev libncurses-dev uuid-dev zlib1g-dev python3 perl xz-utils
           clang --version
       - name: Fetch pinned HackiOS source
         run: |
@@ -59,7 +59,7 @@ jobs:
       - name: Compile kernel from source
         run: |
           set +e
-          upstream/xnu-build.sh -j4 -k 2>&1 | tee kernel-build.log
+          upstream/xnu-build.sh -j4 -k DSYMUTIL=/usr/bin/dsymutil-18 2>&1 | tee kernel-build.log
           status=${PIPESTATUS[0]}
           set -e
           echo "Upstream make status: $status (known post-link export checks may fail)"
