@@ -1,3 +1,46 @@
+# HackiOS boot1 diagnostic image — 2026-10-22
+
+- User explicitly requested a bootable V60 image from the new sources, permitting
+  replacement of the old base. Preserved all old working images and source.
+- Built outputs/v60-hackios-boot1-diag.img (20,840,448 bytes), SHA256
+  0ba55807b4538924c8b9de65574d56d4e8730f35e7f1f4527cad9ea77f9b9f96.
+  Bundle outputs/v60-hackios-boot1-test.zip includes image/manifest/checksums/
+  source/test instructions/upstream notices. NOT V60 hardware-tested. ADB0.
+- Kernel is pinned upstream PREBUILT, SHA9239d4ad...; NOT a full source rebuild.
+  Apple XNU8796.121.2 + upstream73 patches/104 new files also prepared in
+  work/hackios-v60-xnu-src for later source integration. New code tools live in
+  hackios-port/build.py, init.S, smoke.py; upstream sources not imported into Git.
+- Reused exact known V60 boot2 baseline SHA guard and DTB. Shim ONLY byte at
+  offset26a8 changed80->9f: instruction f9001a80->f9001a9f stores zero instead
+  of one in boot_args.Video.v_display. This is essential: original graphics
+  mode gave a blank screen despite successful PID1; text-mode retest passed.
+  Other shim bytes identical. Header v2 ramdisk size and SHA1 recalculated.
+- New virtBase fffffff004000000 (text fffffff007004000), NOT old mkpayload's
+  inferred32MB alignment. RAM b0000000/4d000000, FB9c000000/1080x2460/4320,
+  GICD17a00000/R17a60000, timer27/19.2MHz, CPU0 only. Kernel4K pages; shim
+ 16K ADT/bootargs allocation alignment retained. XNULDRST delta set; no UEFI
+  return callback. CPU/GPU/Wi-Fi/touch/buttons/power peripheral drivers off.
+- Tiny4MB APFS root with own static arm64 /sbin/launchd checks getpid==1,
+  writes V60 HACKIOS: PID1 PASS, sleeps forever. No Apple iOS userland, no
+  existing data/root mounts, no UFS writes. This is NOT an iOS GUI image and
+  does not preserve the old kernel's touch/buttons features on the new base.
+- QEMU actual boot PASS: APFS mount, EL0 PID1 syscall execution, no panic,
+  1080x2460 video geometry. UART-disabled test reads loader_log via QMP and
+  visually verified text console/PID1 marker on framebuffer. /tmp/v60fb2.
+  Two independent physical-image builds byte-identical. Independent unpack
+  validated SHA1, exact DTB, one-byte shim change, segment/window/GIC bounds.
+- macOS iCloud evicts Git metadata and source files into dataless placeholders,
+  causing reads/diffs to hang. Used fresh pinned reference clones under
+  /tmp/v60-hackios-port-20261022/{kernel,userland} for reliable builds. These
+  temporary clones must not be treated as permanent. Canonical sources/docs
+  in work/ios-v60-publish, artifact inputs in work/ also preserved.
+- NEXT REQUIRED hardware evidence: fastboot boot v60-hackios-boot1-diag.img,
+  photo of PID1 PASS or last screen/reset timing. Old touch log puller does
+  NOT support new kernel's ring/address. No device was flashed or booted here.
+  After V60 first boot: source-build SW42902/buttons using redwood_touch_post;
+  choose enough verified RAM/UFS path for matched iOS16.5 GUI; then A650 and
+  QCA6390 PCIe/MHI. Do not claim new GUI/Wi-Fi/GPU or fully completed port.
+
 # HackiOS source feasibility review — 2026-10-22
 
 - User supplied new oosexgang hackios-xnu-{kernel,userland} and asked whether it

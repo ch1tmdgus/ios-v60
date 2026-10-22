@@ -14,8 +14,10 @@ LG V60 ThinQ 5G (`timelm`, Qualcomm SM8250 / Snapdragon 865)용 실험적인
 [wireless3](docs/v60/WIRELESS3.md)는 전원 요청 후 외부 Bluetooth 칩 버전을 질의하는
 다음 테스트이며 아직 실기기 결과를 기다립니다. Wi-Fi 연결·Bluetooth 페어링은 미구현입니다.
 
-새로 공개된 HackiOS 기반의 [V60 이식 검토](docs/v60/HACKIOS.md)를 추가했습니다.
-GPU·Wi-Fi 기반 코드 재사용이 가능하지만 V60 하드웨어 이식과 새 빌드 검증은 남아 있습니다.
+새 HackiOS 기반의 [첫 V60 부팅 진단 이미지](docs/v60/HACKIOS-BOOT1.md)를 만들었습니다.
+새 XNU8796.121.2의 APFS 루트/PID1/화면 출력을 QEMU에서 확인했으며 실기기 시험은 남아 있습니다.
+기존 GUI 빌드와 별도이며 새 기반의 iOS GUI·터치·버튼·GPU·Wi-Fi는 아직 켜지 않습니다.
+하드웨어 차이는 [이식 검토](docs/v60/HACKIOS.md)에 정리했습니다.
 
 ## 다운로드
 

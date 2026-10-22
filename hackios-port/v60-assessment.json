@@ -1,7 +1,7 @@
 {
   "format": "v60-hackios-port-assessment-v1",
   "assessed_on": "2026-10-22",
-  "status": "source-reviewed-not-bootable",
+  "status": "boot1-diagnostic-built-qemu-pid1-pass-v60-untested",
   "upstream": {
     "kernel": {
       "url": "https://github.com/oosexgang/hackios-xnu-kernel",
@@ -74,10 +74,15 @@
     "uefi_or_loader_adaptation_verified": false,
     "matched_kernel_and_userland_built": false,
     "v60_gpu_initialized": false,
-    "qca6390_pcie_mhi_ported": false
+    "qca6390_pcie_mhi_ported": false,
+    "diagnostic_image_built": true,
+    "qemu_apfs_pid1_pass": true,
+    "qemu_framebuffer_console_pass": true,
+    "kernel_source_rebuilt": false,
+    "v60_device_tested": false
   },
   "next_milestones": [
-    "Select V60 UEFI/loader route and validate RAM/GOP/GIC without redwood address defaults",
+    "Test direct V60 shim + HackiOS diagnostic boot1 on the physical V60",
     "Build matched XNU 8796.121.2 + iOS16.5 userland with GPU/Wi-Fi disabled",
     "Adapt SW42902 and buttons to normalized redwood_touch_post events",
     "Port Adreno650 GMU/SMMU/power/firmware and RedwoodGPU ioctl parameter values",
