@@ -22,7 +22,7 @@ jobs:
       - name: Build prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y clang lld flex bison m4 autoconf automake libxml2-dev libssl-dev libbsd-dev libncurses-dev python3 perl xz-utils
+          sudo apt-get install -y clang lld flex bison m4 autoconf automake libxml2-dev libssl-dev libbsd-dev libncurses-dev uuid-dev zlib1g-dev python3 perl xz-utils
           clang --version
       - name: Fetch pinned HackiOS source
         run: |
