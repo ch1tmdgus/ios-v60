@@ -1,3 +1,35 @@
+# Native-source GUI1 candidate and read-only recovery work — 2026-10-23
+
+- Source kernel CI39812932999 succeeded at209a4950b72c26dc5a8fa9d396039f7dfde2c920.
+  Includes SW42902 GPIO-I2C adapter and SPMI button observer, gated by v60=1.
+  New native input is NOT yet hardware-tested. Other board drivers are off.
+- Fixed source compile collisions with scheduler clear_wait and ELF-only section;
+  CI additionally needs uuid-dev and dsymutil-18. Artifact ZIP verified against
+  GitHub SHA3783f12728b467de3427c6bdcc76ff6118973b739ec911fde5088cc3b75859c8.
+- Private matched16.5 APFS is2,492,203,008 bytes. Fixed upstream mkjobs filename
+  clobber by RWA_PACKED16 (382 on-demand plists were overwritten). Now407 plists,
+  406 distinct labels, one stock sysdiagnose alias. CPU GUI adapters rebuild on Mac.
+- Recovery connected/root. ONLY reads performed: userdata≈94GiB contains16GiB HFSX;
+  primary/backup geometry agree. Plan is APFS at+18GiB, protecting HFS and footer.
+  Exact proposed extent has a private2.3GiB host backup. No device write, format,
+  mount, GPT change, reboot or flash in this step. Persistent write needs approval
+  after the user's explicitly read-only inspection authorization.
+- New SWEETXNUv2 shim can read sidecar through UFS with GPT/HFS/bounds/CRC checks,
+  low DMA bounce buffer, high-RAM CPU copies and ABL-list restoration. Source builds;
+  hardware path is UNTESTED. Candidate images and Apple files remain PRIVATE.
+- Live memory/reg differs from inherited Redmi window: banks80000000+3bb00000,
+  c0000000+c0000000,180000000+100000000. All fixed reserved areas belowc0000000;
+  all dynamic pools restricted below4GiB. Candidate uses4..10GiB, QEMU boots this
+  RAM window but real-device validation is pending. Do not reuse old low-window advice.
+- Checks: native input and external-root boundary policies with ASan/UBSan; source
+  shim link/no ABS64 in C objects; Androidv2 ID, original DTB and payload layout.
+  Unstripped Mach-O symbol lookup now excludes STABS (which had returned VA0).
+- QEMU reaches APFS/init checks and SpringBoard/backboardd. Initial software runs
+  remained at Apple logo; do NOT claim lock/home screen or full GUI success.
+- See docs/v60/HACKIOS-GUI1.md and private ~/.local/share/ios-v60/ directories.
+  Next: finish local GUI capture, preserve artifact checksums, obtain explicit
+  sidecar-write authorization before any --install; temporary fastboot boot only.
+
 # boot2 V60 timed-wait hardware PASS — 2026-10-23
 
 - User IMG_2231 shows APFS V60Bringup, PID1 PASS, boot2 aligned-entry banner

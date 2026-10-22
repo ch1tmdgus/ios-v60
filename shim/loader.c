@@ -11,6 +11,9 @@
 #include "console.h"
 #include "fdt.h"
 #include "loader.h"
+#ifdef V60_EXTERNAL_ROOT
+#include "external_root.h"
+#endif
 
 #define BOOT_LINE_LENGTH	608
 #define PAGE_16K		0x4000UL
@@ -84,12 +87,51 @@ const char *loader_boot(uintptr_t dtb)
 	    !fdt_chosen_u64(dtb, "linux,initrd-end", &rd_end))
 		return "no initrd in /chosen";
 	con_hex2("INITRD", "lo=", rd_start, "hi=", rd_end);
+	if (rd_end <= rd_start || rd_end - rd_start < sizeof(struct payload))
+		return "initrd too small for payload header";
 
 	const struct payload *p = (const struct payload *)rd_start;
 	if (!magic_ok(p->magic))
 		return "no SWEETXNU payload";
-	if (p->version != 1 || (p->adt_off & 7) || (rd_start & 7))
+	if ((p->version != 1
+#ifdef V60_EXTERNAL_ROOT
+        && p->version != 2
+#endif
+        ) || (p->adt_off & 7) || (rd_start & 7))
 		return "bad payload header";
+
+#ifdef V60_EXTERNAL_ROOT
+    const struct v60_external_root *external = 0;
+    if (p->version == 2) {
+        uint64_t size = rd_end - rd_start;
+        uint64_t descriptors = sizeof(*p) + (uint64_t)p->nsegs * sizeof(p->segs[0]);
+        if (rd_end <= rd_start || size < sizeof(*p) || p->nsegs > 32 ||
+            descriptors + sizeof(*external) > size || p->adt_off < descriptors + sizeof(*external) ||
+            p->adt_off > size || p->adt_size > size - p->adt_off || p->adt_size > 0x10000 ||
+            p->phys_base != 0x100000000ull || p->mem_size != 0x180000000ull ||
+            p->virt_base != 0xfffffff004000000ull || p->kernel_end < p->virt_base ||
+            p->kernel_end - p->virt_base > p->mem_size - 0x20000 || p->cmdline[607])
+            return "external: invalid payload bounds";
+        external = (const struct v60_external_root *)(rd_start + descriptors);
+        if (!v60_external_valid(external, p->phys_base, p->mem_size))
+            return "external: invalid root descriptor";
+        unsigned roots = 0, entries = 0;
+        uint64_t previous_end = p->virt_base;
+        for (unsigned i = 0; i < p->nsegs; i++) {
+            const struct payload_seg *s = &p->segs[i];
+            if (s->vmaddr < previous_end || s->vmaddr > p->kernel_end ||
+                s->vmsize > p->kernel_end - s->vmaddr || s->file_size > s->vmsize ||
+                s->file_off < descriptors + sizeof(*external) || s->file_off > p->adt_off ||
+                s->file_size > p->adt_off - s->file_off || (s->vmaddr & 7) || (s->file_off & 7))
+                return "external: invalid segment bounds";
+            previous_end = s->vmaddr + s->vmsize;
+            uint64_t pa = s->vmaddr - p->virt_base + p->phys_base;
+            if (pa == external->destination && s->vmsize == external->bytes && !s->file_size) roots++;
+            if (p->entry_va >= s->vmaddr && p->entry_va - s->vmaddr < s->file_size) entries++;
+        }
+        if (roots != 1 || entries != 1) return "external: missing root/entry segment";
+    }
+#endif
 
 	uint64_t pa_of_va_base = p->phys_base - p->virt_base;	/* pa = va + this */
 	con_hex2("PHYS", "base=", p->phys_base, "size=", p->mem_size);
@@ -103,10 +145,21 @@ const char *loader_boot(uintptr_t dtb)
 	for (uint32_t i = 0; i < p->nsegs; i++) {
 		const struct payload_seg *s = &p->segs[i];
 		uintptr_t dst = s->vmaddr + pa_of_va_base;
+#ifdef V60_EXTERNAL_ROOT
+        if (external && dst == external->destination && !s->file_size)
+            continue; /* populated by read-only UFS DMA + CPU copy below */
+#endif
 		copy64(dst, rd_start + s->file_off, s->file_size);
 		if (s->vmsize > s->file_size)
 			zero64(dst + ((s->file_size + 7) & ~7UL), s->vmsize - ((s->file_size + 7) & ~7UL));
 	}
+#ifdef V60_EXTERNAL_ROOT
+    if (external) {
+        const char *error = v60_load_external(external);
+        if (error) return error;
+        con_str("V60 APFS", "image CRC verified; existing HFS unchanged");
+    }
+#endif
 	con_hex2("SEGS", "n=", p->nsegs, "end=", p->kernel_end + pa_of_va_base);
 
 	/* ADT, then boot_args, behind the kernel; everything below topOfKernelData is ours. */

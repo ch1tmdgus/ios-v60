@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include "console.h"
 #include "ufs.h"
+#ifdef V60_EXTERNAL_ROOT
+#include "external_root.h"
+#endif
 
 #define UFS_BASE	0x01d84000UL	/* ufshc@1d84000, sweet live FDT */
 
@@ -264,3 +267,116 @@ void test_ufs(void)
 		return;
 	list_partitions(elba, nent);
 }
+
+#ifdef V60_EXTERNAL_ROOT
+/* Separate from the historical probe: strict GPT/geometry validation and a
+ * bounded 128KiB DMA bounce buffer below 4GiB. No SCSI write commands exist.
+ */
+static uint8_t bounce[128 * 1024] __attribute__((aligned(4096)));
+static uint8_t partition_entries[128 * 128] __attribute__((aligned(4096)));
+static uint32_t le32(const uint8_t *p)
+{ return p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+static int userdata_name(const uint8_t *e)
+{
+    const char *name = "userdata";
+    for (unsigned i = 0; i < 8; i++)
+        if (e[56 + 2*i] != (uint8_t)name[i] || e[57 + 2*i]) return 0;
+    return e[72] == 0 && e[73] == 0;
+}
+static const char *external_read(const struct v60_external_root *d)
+{
+    uint32_t ocs, status;
+    const uint8_t tur[6] = {0};
+    unsigned retry;
+    for (retry = 0; retry < 3; retry++)
+        if (!scsi(0, tur, 6, 0, 0, &ocs, &status)) break;
+    if (retry == 3) return "external: UFS unit not ready";
+    const uint8_t cap10[10] = {0x25};
+    if (scsi(0, cap10, 10, data, 8, &ocs, &status) || be32(data + 4) != BLOCK ||
+        d->last_lba >= be32(data)) return "external: capacity mismatch";
+    if (read_blocks(1, 1, data)) return "external: GPT read failed";
+    const char *sig = "EFI PART";
+    for (unsigned i = 0; i < 8; i++) if (data[i] != (uint8_t)sig[i]) return "external: GPT signature";
+    uint32_t size = le32(data + 12), expected_crc = le32(data + 16);
+    if (size < 92 || size > BLOCK || le64(data + 24) != 1) return "external: GPT header bounds";
+    for (unsigned i = 16; i < 20; i++) data[i] = 0;
+    if ((v60_crc(~0u, data, size) ^ ~0u) != expected_crc) return "external: GPT header CRC";
+    uint64_t entries_lba = le64(data + 72);
+    uint32_t count = le32(data + 80), entry_size = le32(data + 84), array_crc = le32(data + 88);
+    if (entries_lba != 2 || !count || count > 128 || entry_size != 128 ||
+        le64(data + 40) > d->first_lba || le64(data + 48) < d->last_lba)
+        return "external: GPT layout mismatch";
+    if (read_blocks(2, (count * 128 + BLOCK - 1) / BLOCK, partition_entries))
+        return "external: partition entries read failed";
+    if ((v60_crc(~0u, partition_entries, count * 128) ^ ~0u) != array_crc)
+        return "external: partition entries CRC";
+    unsigned matches = 0;
+    for (unsigned i = 0; i < count; i++) {
+        const uint8_t *e = partition_entries + i * 128;
+        if (userdata_name(e)) {
+            if (le64(e + 32) != d->first_lba || le64(e + 40) != d->last_lba)
+                return "external: userdata bounds changed";
+            matches++;
+        }
+    }
+    if (matches != 1) return "external: userdata not unique";
+    if (read_blocks((uint32_t)d->first_lba, 1, data)) return "external: HFS header read failed";
+    uint8_t *h = data + 1024;
+    if (h[0] != 'H' || h[1] != 'X' || be32(h + 40) != BLOCK ||
+        (uint64_t)be32(h + 44) * BLOCK != d->hfs_bytes) return "external: existing HFS geometry changed";
+    uint64_t isa;
+    __asm__ volatile("mrs %0, id_aa64isar0_el1" : "=r"(isa));
+    if (((isa >> 16) & 15) == 0) return "external: CPU CRC extension absent";
+    uint64_t done = 0;
+    uint32_t crc = ~0u, last_percent = 101;
+    while (done < d->bytes) {
+        uint32_t bytes = d->bytes - done > sizeof(bounce) ? sizeof(bounce) : (uint32_t)(d->bytes - done);
+        uint64_t lba = d->first_lba + (d->relative + done) / BLOCK;
+        if (read_blocks((uint32_t)lba, bytes / BLOCK, bounce)) return "external: APFS read failed";
+        if (!done && (le32(bounce + 32) != 0x4253584e || le32(bounce + 36) != BLOCK))
+            return "external: APFS superblock mismatch";
+        volatile uint64_t *dest = (volatile uint64_t *)(uintptr_t)(d->destination + done);
+        volatile const uint64_t *src = (volatile const uint64_t *)bounce;
+        for (unsigned i = 0; i < bytes / 8; i++) {
+            uint64_t word = src[i];
+            dest[i] = word;
+            __asm__ volatile(".arch_extension crc\ncrc32x %w0, %w0, %1" : "+r"(crc) : "r"(word));
+        }
+        done += bytes;
+        uint32_t percent = (uint32_t)(done * 100 / d->bytes);
+        if (percent / 10 != last_percent / 10) {
+            con_hex2("V60 APFS", "percent=", percent, "MiB=", (uint32_t)(done >> 20));
+            last_percent = percent;
+        }
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
+    if ((crc ^ ~0u) != d->image_crc) return "external: APFS CRC mismatch";
+    return 0;
+}
+const char *v60_load_external(const struct v60_external_root *d)
+{
+    if (!(ufs_rd(REG_HCE) & 1) || (ufs_rd(REG_HCS) & (HCS_DP | HCS_UTRLRDY)) !=
+        (HCS_DP | HCS_UTRLRDY) || ufs_rd(REG_UTRLDBR)) return "external: UFS host busy/not ready";
+    if ((uintptr_t)bounce + sizeof(bounce) > (1ull << 32)) return "external: DMA bounce buffer above 4GiB";
+    uint32_t old_lo = ufs_rd(REG_UTRLBA), old_hi = ufs_rd(REG_UTRLBAU), old_run = ufs_rd(REG_UTRLRSR);
+    ufs_wr(REG_UTRLRSR, 0);
+    if (ufs_rd(REG_UTRLRSR) & 1) return "external: cannot stop transfer list";
+    uintptr_t list = (uintptr_t)utrl;
+    ufs_wr(REG_UTRLBA, (uint32_t)list);
+    ufs_wr(REG_UTRLBAU, (uint32_t)(list >> 32));
+    ufs_wr(REG_UTRLRSR, 1);
+    const char *error = "external: transfer list not taken";
+    if (ufs_rd(REG_UTRLBA) == (uint32_t)list && ufs_rd(REG_UTRLBAU) == (uint32_t)(list >> 32) &&
+        (ufs_rd(REG_UTRLRSR) & 1)) error = external_read(d);
+    ufs_wr(REG_UTRLRSR, 0);
+    /* Never restore ABL's descriptors or continue if DMA has not quiesced. */
+    if ((ufs_rd(REG_UTRLRSR) & 1) || ufs_rd(REG_UTRLDBR)) {
+        con_str("V60 APFS", "DMA did not stop; halted");
+        for (;;) __asm__ volatile("wfe");
+    }
+    ufs_wr(REG_UTRLBA, old_lo);
+    ufs_wr(REG_UTRLBAU, old_hi);
+    ufs_wr(REG_UTRLRSR, old_run & 1);
+    return error;
+}
+#endif

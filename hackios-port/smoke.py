@@ -24,9 +24,9 @@ def symbol(buf, wanted):
             symoff, count, stroff, strsize = struct.unpack_from('<4I', buf, off + 8)
             strings = buf[stroff:stroff + strsize]
             for i in range(count):
-                ix, _, _, _, va = struct.unpack_from('<IBBHQ', buf, symoff + 16 * i)
+                ix, kind, section, _, va = struct.unpack_from('<IBBHQ', buf, symoff + 16 * i)
                 end = strings.find(b'\0', ix)
-                if strings[ix:end] == wanted:
+                if not (kind & 0xe0) and (kind & 0x0e) == 0x0e and section and strings[ix:end] == wanted:
                     return va
         off += size
     raise ValueError('kernel symbol absent: ' + repr(wanted))
